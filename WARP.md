@@ -17,6 +17,7 @@ Deal Finder is an AI-powered deal hunting autonomous agent system designed to di
 - Development tools configured: pytest, black, ruff, mypy
 - Basic source structure created (`src/dealfinder/`)
 - Test framework initialized
+- **Terraform infrastructure** configured with modular architecture for cost-effective deployment
 
 ## Architecture Context
 
@@ -106,10 +107,84 @@ The repository is transitioning from planning to implementation:
 4. **Testing**: Each component needs unit tests (pytest) and integration tests against localstack or AWS dev environment
 
 ### Infrastructure as Code
-When creating IaC:
-- Use Terraform modules or AWS CDK constructs for each component
-- Follow the component structure from PRODUCTION_PLAN.md sections
-- Ensure all resources are tagged for cost allocation
+
+**Terraform is the chosen IaC tool** (see TECHNOLOGY_RATIONALE.md for rationale).
+
+#### Terraform Structure
+The infrastructure is organized as follows:
+```
+infrastructure/
+├── bootstrap.sh              # One-time backend setup (S3 + DynamoDB)
+├── environments/
+│   ├── dev/                 # Development environment (cost-optimized)
+│   ├── staging/
+│   └── prod/
+├── modules/
+│   ├── networking/          # VPC, subnets (persistent)
+│   ├── data/               # S3, DynamoDB, Aurora, OpenSearch, MSK
+│   ├── compute/            # Lambda, ECS, Step Functions
+│   ├── ml/                 # SageMaker, Bedrock
+│   ├── monitoring/         # CloudWatch, Prometheus, Grafana
+│   └── security/           # IAM, Secrets Manager, Cognito
+└── shared/                  # Common provider and variable configuration
+```
+
+#### Key Terraform Principles
+1. **Remote State**: All state stored in S3 with DynamoDB locking
+2. **Modular Design**: One responsibility per module, reusable across environments
+3. **Cost Tagging**: Every resource tagged with `Persistent` (true/false) for lifecycle management
+4. **Feature Flags**: Use `enable_*` variables to control expensive resources (MSK, OpenSearch, EMR)
+5. **Snapshot Protection**: Critical data resources (Aurora, OpenSearch) have automatic snapshot creation before destroy
+
+#### Cost Management with Terraform
+**Destroyable Resources** (can be destroyed when not in use):
+- MSK (Kafka): `terraform destroy -target=module.msk` → saves ~$400-600/month
+- OpenSearch: `terraform destroy -target=module.opensearch` → saves ~$300-500/month
+- ECS Fargate: `terraform destroy -target=module.ecs` → saves ~$200-300/month
+- EMR: `terraform destroy -target=module.emr` → saves ~$100-200/month
+- NAT Gateway: Set `enable_nat_gateway=false` → saves ~$100/month
+
+**Persistent Resources** (always keep running):
+- VPC, Subnets, Route Tables (free tier)
+- S3 buckets (minimal cost when idle, lifecycle policies to Glacier)
+- DynamoDB tables (on-demand pricing, scales to zero)
+- Aurora RDS (use t4g.medium in dev, snapshot to restore)
+
+**Total Potential Savings**: ~60-70% cost reduction by selectively destroying non-persistent infrastructure during idle periods.
+
+#### Working with Terraform
+**First-time setup:**
+```bash
+cd infrastructure
+./bootstrap.sh us-east-1 dev          # Create S3 backend
+cd environments/dev
+cp terraform.tfvars.example terraform.tfvars
+terraform init
+terraform plan
+terraform apply                        # Start with all expensive resources disabled
+```
+
+**Daily development pattern:**
+```bash
+# Morning: Enable only what you're working on
+terraform apply -var="enable_msk=true"  # Only if developing streaming
+
+# Evening: Destroy expensive resources
+terraform destroy -target=module.msk
+```
+
+**Complete guide**: See `infrastructure/TERRAFORM_GUIDE.md` for comprehensive best practices, workflows, and troubleshooting.
+
+#### Terraform Best Practices for This Project
+- ✅ Always use `terraform fmt` before committing
+- ✅ Never commit `.tfvars` files (contain environment-specific values)
+- ✅ Use `terraform plan` before `apply` to review changes
+- ✅ Tag all resources consistently for cost tracking
+- ✅ Use feature flags to control expensive resources
+- ✅ Enable snapshot protection for data resources
+- ❌ Never manually edit `.tfstate` files
+- ❌ Never hardcode credentials (use AWS Secrets Manager)
+- ❌ Don't create resources outside Terraform once IaC is adopted
 
 ## Key Architectural Decisions
 
@@ -172,6 +247,8 @@ Key metrics to track:
 All architectural details are documented in:
 - **PRODUCTION_PLAN.md**: Complete system design, component details, migration strategy
 - **PROCESS_FLOWS.md**: Visual diagrams of data flows, pipelines, and workflows
+- **TECHNOLOGY_RATIONALE.md**: Detailed reasoning for each technology choice with alternatives
+- **infrastructure/TERRAFORM_GUIDE.md**: Comprehensive Terraform best practices, workflows, cost management
 
 When making implementation decisions, always reference these documents for:
 - Component interactions
@@ -179,3 +256,4 @@ When making implementation decisions, always reference these documents for:
 - API contracts
 - Deployment procedures
 - Monitoring requirements
+- Infrastructure management and cost optimization
