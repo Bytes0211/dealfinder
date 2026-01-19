@@ -8,7 +8,7 @@ An intelligent multi-agent system that discovers online deals through RSS feeds,
 
 **Current Phase**: Pre-implementation planning and architecture design
 
-This repository contains comprehensive architecture documentation for transforming a Jupyter notebook prototype into a production-ready, cloud-native system.
+This repository contains comprehensive architecture documentation for creating a production-ready, cloud-native system.
 
 ## 🏗️ Architecture Overview
 
