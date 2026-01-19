@@ -6,9 +6,17 @@ This file provides guidance to WARP (warp.dev) when working with code in this re
 
 Deal Finder is an AI-powered deal hunting autonomous agent system designed to discover online deals through RSS feeds, estimate prices using ensemble ML models, and send real-time notifications for high-value opportunities.
 
-**Current State**: Pre-implementation planning phase with comprehensive architecture documentation.
+**Current State**: Early implementation phase - project scaffolding complete with core dependencies installed.
 
 **Target Architecture**: Cloud-native microservices on AWS with Apache technologies for data processing and streaming.
+
+**Current Implementation**:
+- Python 3.12 project structure with `pyproject.toml` configuration
+- Package management via `uv` with locked dependencies
+- Core dependencies installed: FastAPI, Pydantic, boto3, feedparser, redis, httpx
+- Development tools configured: pytest, black, ruff, mypy
+- Basic source structure created (`src/dealfinder/`)
+- Test framework initialized
 
 ## Architecture Context
 
@@ -56,10 +64,34 @@ Scan → Filter → Parallel Price Estimation → Ensemble Weighting → Evaluat
 - ChromaDB (local) → migrating to AWS OpenSearch
 - Pushover API for notifications
 
+## Current Dependencies
+
+### Core Production Dependencies
+- **fastapi** (0.128.0): Web API framework
+- **pydantic** (2.12.5): Data validation and settings management
+- **feedparser** (6.0.12): RSS/Atom feed parsing
+- **boto3** (1.42.30): AWS SDK for Python
+- **redis** (7.1.0): Caching and state management
+- **httpx** (0.28.1): Async HTTP client
+
+### Development Tools
+- **pytest** (9.0.2) + **pytest-asyncio** (1.3.0): Testing framework
+- **black** (26.1.0): Code formatting
+- **ruff** (0.14.13): Fast linting
+- **mypy** (1.19.1): Type checking
+
+### Package Management
+This project uses **uv** for fast, reliable dependency management:
+- Dependencies defined in `pyproject.toml`
+- Lock file: `uv.lock`
+- Install dependencies: `uv pip install -e .`
+- Sync environment: `uv pip sync`
+- Generate requirements.txt: `uv pip freeze > requirements.txt`
+
 ## Development Workflow
 
 ### When Implementing Code
-Since this repository is currently in planning phase, when code is added:
+The repository is transitioning from planning to implementation:
 
 1. **Agent Implementation**: Each agent should be in a separate Lambda-compatible module with:
    - Clear input/output contracts (Pydantic models)
