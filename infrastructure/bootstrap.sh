@@ -76,7 +76,7 @@ else
         --bucket "${BUCKET_NAME}" \
         --lifecycle-configuration '{
             "Rules": [{
-                "Id": "DeleteOldVersions",
+                "ID": "DeleteOldVersions",
                 "Status": "Enabled",
                 "NoncurrentVersionExpiration": {
                     "NoncurrentDays": 90

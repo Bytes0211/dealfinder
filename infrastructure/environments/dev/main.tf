@@ -70,6 +70,19 @@ module "dynamodb" {
   tags = local.common_tags
 }
 
+# CloudWatch Monitoring Module
+module "cloudwatch" {
+  source = "../../modules/monitoring/cloudwatch"
+
+  project_name       = var.project_name
+  environment        = var.environment
+  aws_region         = var.aws_region
+  log_retention_days = var.log_retention_days
+  alarm_email        = var.alarm_email
+
+  tags = local.common_tags
+}
+
 # TODO: Add additional modules as they are implemented
 # module "msk" {
 #   source = "../../modules/data/msk"

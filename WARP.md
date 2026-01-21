@@ -216,6 +216,120 @@ This system is being transformed from a **Jupyter notebook prototype** to produc
 3. **UI Rewrite**: Gradio → React SPA with WebSocket real-time updates
 4. **Deployment**: Local single-instance → Multi-AZ distributed system
 
+## Documentation Standards
+
+### Required Updates After Task/Phase Completion
+
+Whenever you complete any task, update, or phase of work, you MUST update the following documents:
+
+1. **Developer Journal** (`docs/developer_journal.md`)
+   - Add new session entry with date, time, phase
+   - Document all actions taken with timestamps
+   - Record any issues encountered and resolutions
+   - Note unexpected findings and lessons learned
+   - Include code metrics (lines added, files created)
+   - Document architectural decisions made
+   - List blockers and how they were resolved
+   - Specify next steps and prerequisites
+
+2. **Project Status** (`project-status.md`)
+   - Update phase completion percentages
+   - Mark completed tasks with ✅
+   - Update milestone status
+   - Refresh cost estimates if infrastructure changed
+   - Update resource allocation tracking
+   - Revise risk register if new risks identified
+   - Update next actions list
+   - Increment version number and add changelog entry
+
+3. **Tests for New Functionality**
+   - Create unit tests for all new code (`tests/`)
+   - Create integration tests for infrastructure (`tests/infrastructure/`)
+   - Run tests and document results
+   - Update test coverage metrics
+   - Add test documentation to README if needed
+
+4. **Run Validation Tests**
+   - Execute `pytest tests/ -v` for unit tests
+   - Execute `pytest tests/infrastructure/ -v` for infrastructure tests
+   - Verify all tests pass before marking task complete
+   - Document any test failures and fixes
+
+### Documentation Templates
+
+**Developer Journal Entry Format:**
+```markdown
+## Session N: [Phase Name] ([Date])
+
+**Date:** [Date]
+**Time:** [Start] - [End] UTC
+**Duration:** ~X minutes/hours
+**Phase:** [Phase Name]
+**Status:** [✅ COMPLETE | ⚙️ IN PROGRESS | ⏸️ BLOCKED]
+
+### Objective
+[Brief description of what you're trying to accomplish]
+
+### Actions Taken
+#### 1. [Action Name] (X minutes)
+[Detailed description]
+**Issue Encountered:** [If any]
+**Resolution:** [How fixed]
+**Lesson Learned:** [Key takeaway]
+
+### Final State
+[Summary of what was accomplished]
+
+### Lessons Learned
+1. [Lesson 1]
+2. [Lesson 2]
+
+### Next Steps
+[What comes next]
+```
+
+**Project Status Update Format:**
+- Update completion percentage: `**Overall Progress:** X% (Y of Z tasks complete)`
+- Mark tasks: Change 📝 PENDING to ✅ DONE
+- Update milestones table with ACHIEVED status
+- Add to Version History table at bottom
+
+### When to Update Documentation
+
+**Always update after:**
+- Completing any phase or sub-phase
+- Deploying infrastructure changes
+- Fixing significant bugs
+- Making architectural decisions
+- Completing major features
+- Resolving blockers
+- End of each development session
+
+**Update immediately (same session):**
+- Developer journal: Real-time or end of session
+- Project status: After phase completion
+- Tests: As part of feature implementation
+
+### Testing Requirements
+
+All infrastructure changes require validation tests:
+
+1. **Create test file** in `tests/infrastructure/test_[component].py`
+2. **Test structure**:
+   - Use pytest fixtures for AWS clients
+   - Test resource existence
+   - Validate configuration (encryption, tags, etc.)
+   - Check security settings
+3. **Run tests**: `pytest tests/infrastructure/ -v`
+4. **Document results** in developer journal
+
+All application code requires unit tests:
+
+1. **Create test file** in `tests/test_[module].py`
+2. **Test coverage**: Aim for >80% coverage
+3. **Test types**: Unit, integration, edge cases
+4. **Run tests**: `pytest tests/ -v --cov`
+
 ## Important Implementation Notes
 
 ### State Management

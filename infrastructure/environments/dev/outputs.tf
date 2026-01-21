@@ -37,3 +37,29 @@ output "agent_state_table" {
   description = "Agent state DynamoDB table name"
   value       = module.dynamodb.agent_state_table_name
 }
+
+output "user_sessions_table" {
+  description = "User sessions DynamoDB table name"
+  value       = module.dynamodb.user_sessions_table_name
+}
+
+# Monitoring Outputs
+output "application_log_group" {
+  description = "Name of the application CloudWatch log group"
+  value       = module.cloudwatch.application_log_group_name
+}
+
+output "lambda_log_group" {
+  description = "Name of the Lambda CloudWatch log group"
+  value       = module.cloudwatch.lambda_log_group_name
+}
+
+output "alarms_topic_arn" {
+  description = "ARN of the SNS topic for alarms"
+  value       = module.cloudwatch.alarms_topic_arn
+}
+
+output "dashboard_name" {
+  description = "Name of the CloudWatch dashboard"
+  value       = module.cloudwatch.dashboard_name
+}
