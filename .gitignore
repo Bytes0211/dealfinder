@@ -153,6 +153,9 @@ temp/
 docs/_build/
 site/
 
+# Developer journal (private)
+docs/developer_journal.md
+
 # CDK
 .cdk.staging/
 cdk.out/
