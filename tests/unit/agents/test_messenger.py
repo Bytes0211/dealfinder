@@ -238,28 +238,47 @@ class TestMessengerAgentNotifyDeal:
         mock_deal_repo.get_by_id.return_value = deal
         mock_deal_repo.update_status = AsyncMock()
 
-        mock_notif_repo = AsyncMock()
-        mock_notif_repo.create = AsyncMock(side_effect=lambda n: n)
-
-        mock_user_repo = AsyncMock()
-        mock_user_repo.find_active_users.return_value = []  # no users → dispatch skipped
-
         mock_session = AsyncMock()
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session.__aexit__ = AsyncMock(return_value=False)
 
+        agent = MessengerAgent(config=config)
         with (
-            patch.object(agent := MessengerAgent(config=config), "_is_duplicate", return_value=False),
+            patch.object(agent, "_is_duplicate", return_value=False),
             patch.object(agent, "_craft_message", return_value=("Title", "Message")),
+            patch.object(agent, "_dispatch_to_user", new_callable=AsyncMock, return_value=True),
             patch("dealfinder.agents.messenger.get_async_session", return_value=mock_session),
             patch("dealfinder.agents.messenger.DealRepository", return_value=mock_deal_repo),
-            patch("dealfinder.agents.messenger.UserRepository", return_value=mock_user_repo),
-            patch("dealfinder.agents.messenger.NotificationRepository", return_value=mock_notif_repo),
         ):
             result = await agent.notify_deal(deal.id)
 
         assert result["status"] == "notified"
         mock_deal_repo.update_status.assert_called_once_with(deal.id, DealStatus.NOTIFIED)
+
+    async def test_raises_when_all_channels_fail(self) -> None:
+        """If _dispatch_to_user returns False, a RuntimeError should be raised for SQS retry."""
+        config = _make_config()
+        deal = _make_deal()
+
+        mock_deal_repo = AsyncMock()
+        mock_deal_repo.get_by_id.return_value = deal
+
+        mock_session = AsyncMock()
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+
+        agent = MessengerAgent(config=config)
+        with (
+            patch.object(agent, "_is_duplicate", return_value=False),
+            patch.object(agent, "_craft_message", return_value=("Title", "Message")),
+            patch.object(agent, "_dispatch_to_user", new_callable=AsyncMock, return_value=False),
+            patch("dealfinder.agents.messenger.get_async_session", return_value=mock_session),
+            patch("dealfinder.agents.messenger.DealRepository", return_value=mock_deal_repo),
+        ):
+            with pytest.raises(RuntimeError, match="All notification channels failed"):
+                await agent.notify_deal(deal.id)
+
+        mock_deal_repo.update_status.assert_not_called()
 
 
 # ─────────────────────────────────────────────

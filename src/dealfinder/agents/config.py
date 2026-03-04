@@ -16,7 +16,6 @@ class AgentConfig(BaseSettings):
         bedrock_region: AWS region used for Bedrock API calls.
         bedrock_model_id: Bedrock model identifier for Claude (Evaluator).
         notification_queue_url: SQS URL for the notification-dispatch queue.
-        sns_topic_arn: SNS topic ARN for deal-notification fan-out.
         ses_sender_email: Verified SES sender address for email notifications.
         pushover_api_token: Pushover application token (SecretStr; from Secrets Manager).
         dedup_table_name: DynamoDB table used for 24-hour notification deduplication.
@@ -35,7 +34,6 @@ class AgentConfig(BaseSettings):
     notification_queue_url: str = ""
 
     # Messenger Agent fields
-    sns_topic_arn: str = ""
     ses_sender_email: str = ""
     pushover_api_token: SecretStr = SecretStr("")
     dedup_table_name: str = ""

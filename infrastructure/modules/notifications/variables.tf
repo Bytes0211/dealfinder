@@ -38,11 +38,6 @@ variable "notification_dispatch_queue_arn" {
   type        = string
 }
 
-variable "notification_dispatch_queue_url" {
-  description = "URL of the notification-dispatch SQS queue"
-  type        = string
-}
-
 variable "log_retention_days" {
   description = "CloudWatch log retention in days"
   type        = number
@@ -99,12 +94,6 @@ variable "pushover_secret_arn" {
 
 variable "ses_sender_email" {
   description = "Verified SES sender email address for deal alert emails"
-  type        = string
-  default     = ""
-}
-
-variable "dedup_table_name" {
-  description = "Name of the DynamoDB table used for 24-hour notification deduplication"
   type        = string
   default     = ""
 }

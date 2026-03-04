@@ -167,7 +167,6 @@ module "notifications" {
   lambda_security_group_id = module.pipeline.lambda_security_group_id
 
   notification_dispatch_queue_arn = module.pipeline.notification_dispatch_queue_arn
-  notification_dispatch_queue_url = module.pipeline.notification_dispatch_queue_url
 
   log_retention_days  = var.log_retention_days
   alarm_sns_topic_arn = module.cloudwatch.alarms_topic_arn
@@ -178,7 +177,6 @@ module "notifications" {
   db_name            = var.aurora_database_name
   pushover_secret_arn = var.pushover_secret_arn
   ses_sender_email   = var.ses_sender_email
-  dedup_table_name   = var.dedup_table_name
 
   tags = local.common_tags
 }

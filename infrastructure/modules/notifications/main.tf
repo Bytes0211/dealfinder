@@ -26,6 +26,28 @@ resource "aws_sns_topic_subscription" "email" {
 }
 
 # ─────────────────────────────────────────────
+# DynamoDB — Notification Deduplication Table
+# ─────────────────────────────────────────────
+
+resource "aws_dynamodb_table" "dedup" {
+  name         = "${local.prefix}-notif-dedup"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "pk"
+
+  attribute {
+    name = "pk"
+    type = "S"
+  }
+
+  ttl {
+    attribute_name = "expires_at"
+    enabled        = true
+  }
+
+  tags = merge(var.tags, { Name = "${local.prefix}-notif-dedup" })
+}
+
+# ─────────────────────────────────────────────
 # CloudWatch Log Group — Messenger Lambda
 # ─────────────────────────────────────────────
 
@@ -105,10 +127,8 @@ resource "aws_iam_role_policy" "messenger_inline" {
         Action = [
           "dynamodb:GetItem",
           "dynamodb:PutItem",
-          "dynamodb:UpdateItem",
-          "dynamodb:Query",
         ]
-        Resource = "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.project_name}-${var.environment}-*"
+        Resource = aws_dynamodb_table.dedup.arn
       },
       {
         Sid    = "SecretsManager"
@@ -167,9 +187,8 @@ resource "aws_lambda_function" "messenger" {
     variables = {
       DEALFINDER_BEDROCK_REGION     = var.aws_region
       DEALFINDER_BEDROCK_MODEL_ID   = var.bedrock_model_id
-      DEALFINDER_SNS_TOPIC_ARN      = aws_sns_topic.deal_notifications.arn
       DEALFINDER_SES_SENDER_EMAIL   = var.ses_sender_email
-      DEALFINDER_DEDUP_TABLE_NAME   = var.dedup_table_name
+      DEALFINDER_DEDUP_TABLE_NAME   = aws_dynamodb_table.dedup.name
       DB_HOST                       = var.db_host
       DB_NAME                       = var.db_name
       DB_SECRET_ARN                 = var.db_secret_arn

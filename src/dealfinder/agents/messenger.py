@@ -11,7 +11,8 @@ For each record the agent:
 4. Dispatches via Pushover (if the user has a ``pushover_user_key``) and/or
    SES email.
 5. Persists a ``Notification`` row in Aurora for each dispatch attempt.
-6. Marks the deal status as ``NOTIFIED`` and writes the DynamoDB dedup key.
+6. Only if at least one channel succeeded: marks the deal ``NOTIFIED`` and
+   writes the DynamoDB dedup key.  If all channels fail, raises so SQS retries.
 7. Returns ``{"batchItemFailures": [...]}`` so failed records are retried
    rather than silently dropped.
 """
@@ -27,7 +28,6 @@ from uuid import UUID
 import boto3
 from botocore.exceptions import ClientError
 
-from dealfinder.agents.bedrock import BedrockPriceEstimator
 from dealfinder.agents.config import AgentConfig
 from dealfinder.data.repository import (
     DealRepository,
@@ -92,17 +92,15 @@ def _parse_notification_text(response_text: str) -> tuple[str, str]:
     Returns:
         Tuple of (title, message).  Falls back to generic text on parse error.
     """
-    import json as _json
-
     start = response_text.find("{")
     if start != -1:
         try:
-            data, _ = _json.JSONDecoder().raw_decode(response_text, start)
+            data, _ = json.JSONDecoder().raw_decode(response_text, start)
             title = str(data.get("title", ""))[:250]
             message = str(data.get("message", ""))[:1024]
             if title and message:
                 return title, message
-        except (_json.JSONDecodeError, ValueError):
+        except (json.JSONDecodeError, ValueError):
             pass
     return "🔥 Deal Alert", f"{response_text[:200]}"
 
@@ -192,9 +190,7 @@ class MessengerAgent:
             Tuple of (title, message).
         """
         try:
-            import boto3 as _boto3
-
-            client = _boto3.client(
+            client = boto3.client(
                 "bedrock-runtime", region_name=self.config.bedrock_region
             )
             prompt = _build_notification_prompt(deal)
@@ -210,9 +206,7 @@ class MessengerAgent:
                 accept="application/json",
                 body=body,
             )
-            import json as _json
-
-            body_data = _json.loads(response["body"].read())
+            body_data = json.loads(response["body"].read())
             content_blocks = body_data.get("content", [])
             if content_blocks and content_blocks[0].get("type") == "text":
                 return _parse_notification_text(content_blocks[0]["text"])
@@ -230,8 +224,7 @@ class MessengerAgent:
         deal: Deal,
         title: str,
         message: str,
-        notification_repo: NotificationRepository,
-    ) -> None:
+    ) -> bool:
         """Dispatch a notification to all eligible users.
 
         Iterates active users, filters by preference and available keys,
@@ -241,11 +234,15 @@ class MessengerAgent:
             deal: The evaluated deal being notified.
             title: Notification title.
             message: Notification body.
-            notification_repo: Repository for persisting Notification rows.
+
+        Returns:
+            True if at least one channel sent successfully; False otherwise.
         """
         async with get_async_session() as session:
             user_repo = UserRepository(session)
             users = await user_repo.find_active_users()
+
+        any_sent = False
 
         for user in users:
             prefs = user.notification_preferences or {}
@@ -272,6 +269,7 @@ class MessengerAgent:
                     async with get_async_session() as session:
                         nr = NotificationRepository(session)
                         await nr.mark_as_sent(notif.id, external_id=receipt)
+                    any_sent = True
                 except Exception as exc:
                     logger.error(f"Pushover dispatch failed for user {user.id}: {exc}")
                     async with get_async_session() as session:
@@ -300,11 +298,14 @@ class MessengerAgent:
                     async with get_async_session() as session:
                         nr = NotificationRepository(session)
                         await nr.mark_as_sent(notif_email.id, external_id=msg_id)
+                    any_sent = True
                 except Exception as exc:
                     logger.error(f"SES dispatch failed for user {user.id}: {exc}")
                     async with get_async_session() as session:
                         nr = NotificationRepository(session)
                         await nr.mark_as_failed(notif_email.id, error_message=str(exc))
+
+        return any_sent
 
     async def notify_deal(self, deal_id: UUID) -> dict:
         """Process a single deal notification.
@@ -316,6 +317,10 @@ class MessengerAgent:
             Dictionary with ``status`` (``"notified"``, ``"skipped"``,
             ``"not_found"``), ``deal_id`` string, and ``channels_attempted``
             count.
+
+        Raises:
+            RuntimeError: If every configured channel fails, so SQS retries
+                the record rather than marking it delivered.
         """
         if self._is_duplicate(deal_id):
             return {
@@ -339,9 +344,12 @@ class MessengerAgent:
 
         title, message = self._craft_message(deal)
 
-        async with get_async_session() as session:
-            notification_repo = NotificationRepository(session)
-            await self._dispatch_to_user(deal, title, message, notification_repo)
+        any_sent = await self._dispatch_to_user(deal, title, message)
+
+        if not any_sent:
+            raise RuntimeError(
+                f"All notification channels failed for deal {deal_id} — SQS will retry"
+            )
 
         async with get_async_session() as session:
             deal_repo = DealRepository(session)

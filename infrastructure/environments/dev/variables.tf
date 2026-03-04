@@ -169,12 +169,6 @@ variable "messenger_bedrock_model_id" {
   default     = "anthropic.claude-3-sonnet-20240229-v1:0"
 }
 
-variable "dedup_table_name" {
-  description = "DynamoDB table name for notification deduplication"
-  type        = string
-  default     = ""
-}
-
 variable "enable_pipeline_schedule" {
   description = "Enable EventBridge schedule to run the pipeline automatically"
   type        = bool
