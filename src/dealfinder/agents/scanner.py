@@ -9,6 +9,7 @@ duplicates.
 import asyncio
 import hashlib
 import logging
+import socket
 from datetime import datetime, timezone
 from typing import Any
 
@@ -21,6 +22,12 @@ from dealfinder.db.connection import get_async_session
 from dealfinder.db.models import Deal, DealSource, DealStatus
 
 logger = logging.getLogger(__name__)
+
+# Apply a global socket timeout so feedparser.parse() cannot block the
+# executor thread pool indefinitely if a feed server hangs. asyncpg uses
+# asyncio and is unaffected by this setting.
+_FEED_SOCKET_TIMEOUT_SECONDS = 30
+socket.setdefaulttimeout(_FEED_SOCKET_TIMEOUT_SECONDS)
 
 
 class ScannerAgent:

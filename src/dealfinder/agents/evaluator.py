@@ -97,8 +97,9 @@ class EvaluatorAgent:
 
         Raises:
             ClientError: Re-raised for transient Bedrock errors (ThrottlingException,
-                ServiceUnavailableException, ModelTimeoutException) so the
-                Step Functions EvaluateDeal Retry block can handle them.
+                ServiceUnavailableException, ModelTimeoutException,
+                InternalServerException) so the Step Functions EvaluateDeal
+                Retry block can handle them.
         """
         async with get_async_session() as session:
             deal_repo = DealRepository(session)

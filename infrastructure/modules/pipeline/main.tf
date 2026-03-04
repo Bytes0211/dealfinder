@@ -215,6 +215,24 @@ resource "aws_security_group" "lambda" {
     description = "Allow outbound HTTPS to AWS services and RSS feed URLs"
   }
 
+  egress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow outbound HTTP for RSS feeds served over plain HTTP"
+  }
+
+  # TODO: Tighten to the Aurora security group CIDR once the networking
+  # module exposes it as an output variable.
+  egress {
+    from_port   = 5432
+    to_port     = 5432
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow outbound PostgreSQL to Aurora cluster"
+  }
+
   tags = merge(var.tags, { Name = "${local.prefix}-lambda-sg" })
 }
 
