@@ -40,6 +40,19 @@ class PriceEstimationResult:
     inference_time_ms: int
 
 
+def _sanitize(value: str, max_len: int = 500) -> str:
+    """Strip newlines and truncate to prevent prompt injection.
+
+    Args:
+        value: Input string from an untrusted source (e.g. an RSS feed field).
+        max_len: Maximum number of characters to retain after truncation.
+
+    Returns:
+        Sanitized string safe for Claude prompt interpolation.
+    """
+    return value[:max_len].replace("\n", " ").replace("\r", " ")
+
+
 class BedrockPriceEstimator:
     """Estimates fair market prices for deals using AWS Bedrock (Claude).
 
@@ -91,7 +104,7 @@ class BedrockPriceEstimator:
         Args:
             title: Product title or name.
             sale_price: Current sale price of the item.
-            description: Optional product description (truncated to 500 chars).
+            description: Optional product description (sanitized and truncated to 500 chars).
             category: Optional product category.
             brand: Optional brand name.
 
@@ -101,14 +114,14 @@ class BedrockPriceEstimator:
         lines = [
             "You are a pricing expert. Estimate the fair market retail price for this product.",
             "",
-            f"Product: {title}",
+            f"Product: {_sanitize(title)}",
         ]
         if brand:
-            lines.append(f"Brand: {brand}")
+            lines.append(f"Brand: {_sanitize(brand)}")
         if category:
-            lines.append(f"Category: {category}")
+            lines.append(f"Category: {_sanitize(category)}")
         if description:
-            lines.append(f"Description: {description[:500]}")
+            lines.append(f"Description: {_sanitize(description)}")
         lines.append(f"Current sale price: ${sale_price}")
         lines.extend([
             "",

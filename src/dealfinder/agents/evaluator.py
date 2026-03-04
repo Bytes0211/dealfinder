@@ -11,6 +11,8 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
+from botocore.exceptions import ClientError
+
 from dealfinder.agents.bedrock import BedrockPriceEstimator, PriceEstimationResult
 from dealfinder.agents.config import AgentConfig
 from dealfinder.data.repository import DealRepository, PriceEstimateRepository
@@ -18,6 +20,12 @@ from dealfinder.db.connection import get_async_session
 from dealfinder.db.models import DealStatus, PriceEstimate
 
 logger = logging.getLogger(__name__)
+
+_TRANSIENT_BEDROCK_CODES: frozenset[str] = frozenset({
+    "ThrottlingException",
+    "ServiceUnavailableException",
+    "ModelTimeoutException",
+})
 
 
 class EvaluatorAgent:
@@ -85,6 +93,11 @@ class EvaluatorAgent:
                 discount_percentage: Calculated discount (float, 0 if not evaluated).
                 estimated_value: Bedrock estimated price (float, 0 if not evaluated).
                 confidence: Bedrock confidence score (float, 0 if not evaluated).
+
+        Raises:
+            ClientError: Re-raised for transient Bedrock errors (ThrottlingException,
+                ServiceUnavailableException, ModelTimeoutException) so the
+                Step Functions EvaluateDeal Retry block can handle them.
         """
         async with get_async_session() as session:
             deal_repo = DealRepository(session)
@@ -129,6 +142,19 @@ class EvaluatorAgent:
                         brand=deal.brand,
                     ),
                 )
+            except ClientError as e:
+                if e.response["Error"]["Code"] in _TRANSIENT_BEDROCK_CODES:
+                    raise  # let Step Functions retry via EvaluateDeal Retry block
+                logger.error(f"Bedrock estimation failed for deal {deal_id}: {e}")
+                await deal_repo.update_status(deal_id, DealStatus.REJECTED)
+                return {
+                    "deal_id": str(deal_id),
+                    "status": "estimation_failed",
+                    "is_high_value": False,
+                    "discount_percentage": 0.0,
+                    "estimated_value": 0.0,
+                    "confidence": 0.0,
+                }
             except Exception as e:
                 logger.error(f"Bedrock estimation failed for deal {deal_id}: {e}")
                 await deal_repo.update_status(deal_id, DealStatus.REJECTED)

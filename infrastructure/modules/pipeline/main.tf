@@ -73,6 +73,12 @@ resource "aws_cloudwatch_log_group" "evaluator" {
 }
 
 # ─────────────────────────────────────────────
+# Data Sources
+# ─────────────────────────────────────────────
+
+data "aws_caller_identity" "current" {}
+
+# ─────────────────────────────────────────────
 # IAM — Lambda Execution Roles
 # ─────────────────────────────────────────────
 
@@ -124,13 +130,13 @@ resource "aws_iam_role_policy" "scanner_inline" {
           "dynamodb:UpdateItem",
           "dynamodb:Query",
         ]
-        Resource = "arn:aws:dynamodb:${var.aws_region}:*:table/${var.project_name}-${var.environment}-*"
+        Resource = "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.project_name}-${var.environment}-*"
       },
       {
         Sid    = "SecretsManager"
         Effect = "Allow"
         Action = ["secretsmanager:GetSecretValue"]
-        Resource = "arn:aws:secretsmanager:${var.aws_region}:*:secret:${var.project_name}/${var.environment}/*"
+        Resource = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/${var.environment}/*"
       },
     ]
   })
@@ -180,13 +186,13 @@ resource "aws_iam_role_policy" "evaluator_inline" {
           "dynamodb:UpdateItem",
           "dynamodb:Query",
         ]
-        Resource = "arn:aws:dynamodb:${var.aws_region}:*:table/${var.project_name}-${var.environment}-*"
+        Resource = "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.project_name}-${var.environment}-*"
       },
       {
         Sid    = "SecretsManager"
         Effect = "Allow"
         Action = ["secretsmanager:GetSecretValue"]
-        Resource = "arn:aws:secretsmanager:${var.aws_region}:*:secret:${var.project_name}/${var.environment}/*"
+        Resource = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/${var.environment}/*"
       },
     ]
   })
@@ -413,10 +419,10 @@ resource "aws_sfn_state_machine" "pipeline" {
 
       ProcessDeals = {
         Type                       = "Map"
-        Comment                    = "Evaluate each newly discovered deal in parallel (max 5)"
+        Comment                    = "Evaluate each newly discovered deal in parallel. 50% failure tolerance: minor per-deal failures are absorbed; >50% failure rate causes execution failure and surfaces in ExecutionsFailed metrics."
         ItemsPath                  = "$.new_deal_ids"
         MaxConcurrency             = 5
-        ToleratedFailurePercentage = 100
+        ToleratedFailurePercentage = 50
         ItemSelector = {
           "deal_id.$" = "$$.Map.Item.Value"
         }

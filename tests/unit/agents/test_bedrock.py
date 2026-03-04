@@ -9,7 +9,7 @@ from decimal import Decimal
 
 import pytest
 
-from dealfinder.agents.bedrock import BedrockPriceEstimator, PriceEstimationResult
+from dealfinder.agents.bedrock import BedrockPriceEstimator, PriceEstimationResult, _sanitize
 from dealfinder.agents.config import AgentConfig
 
 
@@ -198,3 +198,60 @@ class TestPriceEstimationResult:
         )
         assert result.range_low is None
         assert result.range_high is None
+
+
+class TestSanitize:
+    """Tests for the module-level _sanitize helper."""
+
+    def test_strips_newlines(self) -> None:
+        """Newline characters should be replaced with spaces."""
+        assert _sanitize("foo\nbar") == "foo bar"
+
+    def test_strips_carriage_returns(self) -> None:
+        """Carriage return characters should be replaced with spaces."""
+        assert _sanitize("foo\rbar") == "foo bar"
+
+    def test_truncates_to_default_max_len(self) -> None:
+        """Input longer than 500 chars should be truncated to 500."""
+        assert len(_sanitize("x" * 1000)) == 500
+
+    def test_truncates_to_custom_max_len(self) -> None:
+        """Custom max_len should be respected."""
+        assert len(_sanitize("x" * 100, max_len=50)) == 50
+
+    def test_short_clean_string_unchanged(self) -> None:
+        """Input shorter than max_len with no special characters is returned as-is."""
+        assert _sanitize("Sony Headphones") == "Sony Headphones"
+
+
+class TestBuildPromptSanitization:
+    """Tests that _build_prompt sanitizes untrusted RSS content before interpolation."""
+
+    def test_newlines_stripped_from_title(self, estimator: BedrockPriceEstimator) -> None:
+        """Newlines in title should be replaced with spaces to prevent prompt injection."""
+        prompt = estimator._build_prompt(
+            title="Widget\nFake instruction",
+            sale_price=Decimal("10.00"),
+        )
+        assert "Widget Fake instruction" in prompt
+        assert "Widget\nFake instruction" not in prompt
+
+    def test_newlines_stripped_from_description(self, estimator: BedrockPriceEstimator) -> None:
+        """Newlines in description should be replaced with spaces."""
+        prompt = estimator._build_prompt(
+            title="Widget",
+            sale_price=Decimal("10.00"),
+            description="Legit desc\nFake instruction",
+        )
+        assert "Legit desc Fake instruction" in prompt
+        assert "Legit desc\nFake instruction" not in prompt
+
+    def test_newlines_stripped_from_brand(self, estimator: BedrockPriceEstimator) -> None:
+        """Newlines in brand should be replaced with spaces."""
+        prompt = estimator._build_prompt(
+            title="Widget",
+            sale_price=Decimal("10.00"),
+            brand="Acme\nInjected",
+        )
+        assert "Acme Injected" in prompt
+        assert "Acme\nInjected" not in prompt

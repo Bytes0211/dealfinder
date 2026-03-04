@@ -10,6 +10,7 @@ from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
+from botocore.exceptions import ClientError
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
@@ -392,3 +393,71 @@ class TestEvaluatorAgentRun:
         agent.evaluate_deal = _mock_evaluate
         result = await agent.run({"deal_id": str(deal_id)})
         assert result["deal_id"] == str(deal_id)
+
+
+class TestEvaluatorAgentTransientErrors:
+    """Tests for transient Bedrock error handling in EvaluatorAgent.evaluate_deal."""
+
+    async def test_transient_clienterror_is_reraised(
+        self, engine, deal_with_price: Deal, config: AgentConfig
+    ) -> None:
+        """ThrottlingException should propagate so Step Functions can retry.
+
+        A transient AWS error must not be swallowed as a deal REJECTED response;
+        the Lambda must exit with an exception so the EvaluateDeal Retry block fires.
+        """
+        error_response = {"Error": {"Code": "ThrottlingException", "Message": "Rate exceeded"}}
+        failing_estimator = MagicMock()
+        failing_estimator.estimate_price.side_effect = ClientError(error_response, "InvokeModel")
+        agent = EvaluatorAgent(config=config, estimator=failing_estimator)
+
+        factory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        import dealfinder.agents.evaluator as evaluator_module
+        from contextlib import asynccontextmanager
+
+        @asynccontextmanager
+        async def _test_session():
+            async with factory() as s:
+                yield s
+
+        original = evaluator_module.get_async_session
+        evaluator_module.get_async_session = _test_session
+
+        try:
+            with pytest.raises(ClientError):
+                await agent.evaluate_deal(deal_with_price.id)
+        finally:
+            evaluator_module.get_async_session = original
+
+    async def test_permanent_clienterror_rejects_deal(
+        self, engine, deal_with_price: Deal, config: AgentConfig
+    ) -> None:
+        """Non-transient ClientError should mark the deal REJECTED rather than propagate.
+
+        A permanent error (e.g. ValidationException) is not retryable by Step Functions;
+        the deal should be marked estimation_failed and a success response returned.
+        """
+        error_response = {"Error": {"Code": "ValidationException", "Message": "Bad input"}}
+        failing_estimator = MagicMock()
+        failing_estimator.estimate_price.side_effect = ClientError(error_response, "InvokeModel")
+        agent = EvaluatorAgent(config=config, estimator=failing_estimator)
+
+        factory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        import dealfinder.agents.evaluator as evaluator_module
+        from contextlib import asynccontextmanager
+
+        @asynccontextmanager
+        async def _test_session():
+            async with factory() as s:
+                yield s
+
+        original = evaluator_module.get_async_session
+        evaluator_module.get_async_session = _test_session
+
+        try:
+            result = await agent.evaluate_deal(deal_with_price.id)
+        finally:
+            evaluator_module.get_async_session = original
+
+        assert result["status"] == "estimation_failed"
+        assert result["is_high_value"] is False
