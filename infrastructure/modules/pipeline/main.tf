@@ -488,8 +488,10 @@ resource "aws_sfn_state_machine" "pipeline" {
               Resource = "arn:aws:states:::sqs:sendMessage"
               Comment  = "Enqueue deal_id for the Messenger Agent (Phase 4)"
               Parameters = {
-                QueueUrl       = aws_sqs_queue.notification_dispatch.url
-                "MessageBody.$" = "$.deal_id"
+                QueueUrl        = aws_sqs_queue.notification_dispatch.url
+                # Wrap deal_id in a JSON object so Phase 4 consumers can use
+                # json.loads(record["body"])["deal_id"] consistently.
+                "MessageBody.$" = "States.Format('{\"deal_id\": \"{}\"}', $.deal_id)"
               }
               ResultPath = null
               Retry = [

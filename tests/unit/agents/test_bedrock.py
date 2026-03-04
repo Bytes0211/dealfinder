@@ -159,6 +159,18 @@ class TestParseResponse:
         data = estimator._parse_response(response)
         assert data["confidence"] == 1.0
 
+    def test_raises_on_zero_estimated_price(self, estimator: BedrockPriceEstimator) -> None:
+        """estimated_price of 0 should raise ValueError."""
+        response = json.dumps({"estimated_price": 0, "confidence": 0.8})
+        with pytest.raises(ValueError, match="estimated_price must be positive"):
+            estimator._parse_response(response)
+
+    def test_raises_on_negative_estimated_price(self, estimator: BedrockPriceEstimator) -> None:
+        """Negative estimated_price should raise ValueError."""
+        response = json.dumps({"estimated_price": -50.0, "confidence": 0.9})
+        with pytest.raises(ValueError, match="estimated_price must be positive"):
+            estimator._parse_response(response)
+
     def test_optional_range_fields_absent(self, estimator: BedrockPriceEstimator) -> None:
         """Response without range_low / range_high should still parse."""
         response = json.dumps({"estimated_price": 50.0, "confidence": 0.7})
@@ -253,6 +265,15 @@ class TestSanitize:
     def test_truncates_to_custom_max_len(self) -> None:
         """Custom max_len should be respected."""
         assert len(_sanitize("x" * 100, max_len=50)) == 50
+
+    def test_strips_tabs(self) -> None:
+        """Horizontal tab characters should be replaced with spaces."""
+        assert _sanitize("foo\tbar") == "foo bar"
+
+    def test_strips_unicode_line_separators(self) -> None:
+        """Unicode line separator (U+2028) and paragraph separator (U+2029) should be replaced."""
+        assert _sanitize("foo\u2028bar") == "foo bar"
+        assert _sanitize("foo\u2029bar") == "foo bar"
 
     def test_short_clean_string_unchanged(self) -> None:
         """Input shorter than max_len with no special characters is returned as-is."""

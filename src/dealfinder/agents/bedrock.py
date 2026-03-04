@@ -40,7 +40,10 @@ class PriceEstimationResult:
 
 
 def _sanitize(value: str, max_len: int = 500) -> str:
-    """Strip newlines and truncate to prevent prompt injection.
+    """Strip whitespace control characters and truncate to prevent prompt injection.
+
+    Replaces newlines, carriage returns, horizontal tabs, and Unicode line/paragraph
+    separators (U+2028, U+2029) with spaces, then truncates to max_len characters.
 
     Args:
         value: Input string from an untrusted source (e.g. an RSS feed field).
@@ -49,7 +52,14 @@ def _sanitize(value: str, max_len: int = 500) -> str:
     Returns:
         Sanitized string safe for Claude prompt interpolation.
     """
-    return value[:max_len].replace("\n", " ").replace("\r", " ")
+    return (
+        value[:max_len]
+        .replace("\n", " ")
+        .replace("\r", " ")
+        .replace("\t", " ")
+        .replace("\u2028", " ")
+        .replace("\u2029", " ")
+    )
 
 
 class BedrockPriceEstimator:
@@ -158,6 +168,10 @@ class BedrockPriceEstimator:
         if missing:
             raise ValueError(f"Missing required fields in response: {missing}")
 
+        estimated_price = float(data["estimated_price"])
+        if estimated_price <= 0:
+            raise ValueError(f"estimated_price must be positive, got {estimated_price}")
+
         confidence = float(data["confidence"])
         if not 0.0 <= confidence <= 1.0:
             raise ValueError(f"Confidence {confidence} outside 0.0–1.0 range")
@@ -214,7 +228,10 @@ class BedrockPriceEstimator:
         inference_ms = int(time.time() * 1000) - start_ms
 
         response_body = json.loads(response["body"].read())
-        response_text = response_body["content"][0]["text"]
+        content_blocks = response_body.get("content", [])
+        if not content_blocks or content_blocks[0].get("type") != "text":
+            raise ValueError(f"Unexpected Bedrock response structure: {response_body}")
+        response_text = content_blocks[0]["text"]
 
         data = self._parse_response(response_text)
 
