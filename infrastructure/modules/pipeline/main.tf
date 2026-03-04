@@ -412,10 +412,11 @@ resource "aws_sfn_state_machine" "pipeline" {
       }
 
       ProcessDeals = {
-        Type           = "Map"
-        Comment        = "Evaluate each newly discovered deal in parallel (max 5)"
-        ItemsPath      = "$.new_deal_ids"
-        MaxConcurrency = 5
+        Type                       = "Map"
+        Comment                    = "Evaluate each newly discovered deal in parallel (max 5)"
+        ItemsPath                  = "$.new_deal_ids"
+        MaxConcurrency             = 5
+        ToleratedFailurePercentage = 100
         ItemSelector = {
           "deal_id.$" = "$$.Map.Item.Value"
         }
@@ -476,7 +477,7 @@ resource "aws_sfn_state_machine" "pipeline" {
               Catch = [
                 {
                   ErrorEquals = ["States.ALL"]
-                  Next        = "DealProcessed"
+                  Next        = "DealFailed"
                   ResultPath  = "$.error"
                 }
               ]
@@ -487,9 +488,9 @@ resource "aws_sfn_state_machine" "pipeline" {
               End  = true
             }
             DealFailed = {
-              Type    = "Pass"
-              Comment = "Absorbs per-deal Lambda failures so the Map continues processing the remaining batch. CloudWatch DLQ alarms provide failure alerting without requiring a fail-fast stop."
-              End     = true
+              Type  = "Fail"
+              Error = "DealEvaluationError"
+              Cause = "Per-deal Lambda failure; Map continues via ToleratedFailurePercentage. See CloudWatch logs for details."
             }
           }
         }
