@@ -153,6 +153,59 @@ module "opensearch" {
   tags = local.common_tags
 }
 
+# Notifications Module (Phase 4)
+module "notifications" {
+  source = "../../modules/notifications"
+
+  project_name       = var.project_name
+  environment        = var.environment
+  aws_region         = var.aws_region
+  vpc_id             = module.networking.vpc_id
+  vpc_cidr           = module.networking.vpc_cidr
+  private_subnet_ids = module.networking.private_subnet_ids
+
+  lambda_security_group_id = module.pipeline.lambda_security_group_id
+
+  notification_dispatch_queue_arn = module.pipeline.notification_dispatch_queue_arn
+  notification_dispatch_queue_url = module.pipeline.notification_dispatch_queue_url
+
+  log_retention_days  = var.log_retention_days
+  alarm_sns_topic_arn = module.cloudwatch.alarms_topic_arn
+
+  bedrock_model_id   = var.messenger_bedrock_model_id
+  db_secret_arn      = var.db_secret_arn
+  db_host            = try(module.aurora[0].cluster_endpoint, "")
+  db_name            = var.aurora_database_name
+  pushover_secret_arn = var.pushover_secret_arn
+  ses_sender_email   = var.ses_sender_email
+  dedup_table_name   = var.dedup_table_name
+
+  tags = local.common_tags
+}
+
+# API Module (Phase 4)
+module "api" {
+  source = "../../modules/api"
+
+  project_name       = var.project_name
+  environment        = var.environment
+  aws_region         = var.aws_region
+  vpc_id             = module.networking.vpc_id
+  vpc_cidr           = module.networking.vpc_cidr
+  private_subnet_ids = module.networking.private_subnet_ids
+
+  lambda_security_group_id = module.pipeline.lambda_security_group_id
+
+  log_retention_days  = var.log_retention_days
+  alarm_sns_topic_arn = module.cloudwatch.alarms_topic_arn
+
+  db_secret_arn = var.db_secret_arn
+  db_host       = try(module.aurora[0].cluster_endpoint, "")
+  db_name       = var.aurora_database_name
+
+  tags = local.common_tags
+}
+
 # Pipeline Module (Phase 3)
 module "pipeline" {
   source = "../../modules/pipeline"
