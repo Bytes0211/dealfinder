@@ -6,7 +6,7 @@ An intelligent multi-agent system that discovers online deals through RSS feeds,
 
 ## Project Status
 
-**Current Phase:** Phase 3 Complete — Core Pipeline Implemented | Ready for Phase 4
+**Current Phase:** Phase 4 Complete — Notifications + API Implemented | Ready for Phase 5
 
 **Scope:** 5 phases / 10 weeks | Serverless-first | Target cost: $200-500/month
 
@@ -79,13 +79,27 @@ dealfinder/
 │       ├── networking/            # VPC, subnets, VPC endpoints
 │       ├── data/                  # S3, DynamoDB, Aurora, OpenSearch
 │       ├── monitoring/            # CloudWatch logs, alarms, dashboard
-│       └── pipeline/              # SQS, Lambda, Step Functions, EventBridge
+│       ├── pipeline/              # SQS, Lambda, Step Functions, EventBridge
+│       ├── notifications/         # SNS, Messenger Lambda, IAM (Phase 4)
+│       └── api/                   # API Lambda, API Gateway, Cognito (Phase 4)
 ├── src/dealfinder/                # Python package
 │   ├── agents/
 │   │   ├── config.py              # AgentConfig (pydantic-settings)
 │   │   ├── bedrock.py             # BedrockPriceEstimator + PriceEstimationResult
 │   │   ├── scanner.py             # ScannerAgent Lambda + handler()
-│   │   └── evaluator.py           # EvaluatorAgent Lambda + handler()
+│   │   ├── evaluator.py           # EvaluatorAgent Lambda + handler()
+│   │   └── messenger.py           # MessengerAgent Lambda + handler() (Phase 4)
+│   ├── notifications/             # Notification clients (Phase 4)
+│   │   ├── pushover.py            # PushoverClient (httpx)
+│   │   └── ses.py                 # SesClient (boto3 SES v2)
+│   ├── api/                       # FastAPI REST API (Phase 4)
+│   │   ├── main.py                # FastAPI app + Mangum handler
+│   │   ├── schemas.py             # Pydantic request/response models
+│   │   ├── deps.py                # DB session + Cognito auth dependencies
+│   │   └── routes/
+│   │       ├── health.py          # GET /api/v1/health
+│   │       ├── deals.py           # GET /api/v1/deals, /top, /{id}
+│   │       └── users.py           # POST /api/v1/users, PUT preferences
 │   ├── db/
 │   │   ├── models.py              # SQLAlchemy ORM models (5 models, 3 enums)
 │   │   ├── connection.py          # Async engine and session management
@@ -98,7 +112,9 @@ dealfinder/
 │       └── index.py               # Index management and mappings
 ├── tests/
 │   ├── unit/
-│   │   ├── agents/                # Agent unit tests (37 tests)
+│   │   ├── agents/                # Agent unit tests (58 tests)
+│   │   ├── notifications/         # PushoverClient + SesClient tests (Phase 4)
+│   │   ├── api/                   # FastAPI endpoint tests (Phase 4)
 │   │   ├── db/                    # ORM model tests
 │   │   ├── data/                  # Repository tests
 │   │   └── search/                # OpenSearch/embedding tests
@@ -190,12 +206,15 @@ Feature flags keep idle dev costs at ~$4-10/month:
 - Step Functions state machine (Scan → Map(Evaluate → IsHighValue?) → Notify)
 - SQS queues + DLQ alarms + EventBridge schedule (disabled by default)
 
-### Phase 4: Notifications + API (Weeks 8-9) — NEXT
-- Messenger Agent Lambda (Bedrock + Pushover)
-- SES email + SNS fan-out
-- FastAPI REST API + API Gateway + Cognito auth
+### Phase 4: Notifications + API (Weeks 8-9) — COMPLETE
+- MessengerAgent Lambda (SQS batch, DynamoDB dedup, Bedrock message crafting)
+- PushoverClient + SesClient with full error handling
+- SNS topic for deal-notifications fan-out
+- FastAPI REST API (6 endpoints) + Mangum adapter
+- API Gateway HTTP API v2 + Cognito JWT authorizer
+- Terraform modules: `notifications/` + `api/`
 
-### Phase 5: Polish + Deploy (Week 10)
+### Phase 5: Polish + Deploy (Week 10) — NEXT
 - Integration tests (end-to-end)
 - Production Terraform environment
 - Production deploy + validation
