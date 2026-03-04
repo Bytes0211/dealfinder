@@ -47,7 +47,7 @@ src/dealfinder/
 │   ├── connection.py       # Async engine, session factory, context manager
 │   └── alembic/            # Database migrations
 ├── data/
-│   └── repository.py       # Repository pattern (6 repository classes)
+│   └── repository.py       # Repository pattern (5 repository classes + BaseRepository)
 ├── search/
 │   ├── client.py           # OpenSearch client (k-NN, bulk, CRUD)
 │   ├── embeddings.py       # Embedding service (abstract provider pattern)
@@ -193,7 +193,7 @@ Feature flags keep idle costs at ~$4-10/month:
 | `PRODUCTION_PLAN.md` | Revised architecture and phase plan |
 | `developer/project-status.md` | Progress tracking and timeline |
 | `src/dealfinder/db/models.py` | All 5 ORM models |
-| `src/dealfinder/data/repository.py` | All 6 repository classes |
+| `src/dealfinder/data/repository.py` | All 5 repository classes + BaseRepository |
 | `src/dealfinder/db/connection.py` | Async DB engine and session management |
 | `src/dealfinder/search/client.py` | OpenSearch client |
 | `src/dealfinder/search/embeddings.py` | Embedding provider abstraction |

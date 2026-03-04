@@ -2,122 +2,101 @@
 
 > AI-Powered Deal Hunting Autonomous Agent System
 
-An intelligent multi-agent system that discovers online deals through RSS feeds, estimates prices using ensemble ML models, and delivers real-time notifications for high-value opportunities.
+An intelligent multi-agent system that discovers online deals through RSS feeds, estimates prices using AWS Bedrock (Claude), and delivers real-time notifications for high-value opportunities. Built serverless on AWS by a solo developer.
 
-## 🎯 Project Status
+## Project Status
 
-**Current Phase**: Phase 2 Complete ✅ - Data Layer Implemented | Ready for Phase 3
+**Current Phase:** Phase 2 Complete — Data Layer Implemented | Ready for Phase 3
 
-**Infrastructure Live**: 47 AWS resources deployed (Phase 1) + Data layer modules ready (Phase 2).
+**Scope:** 5 phases / 10 weeks | Serverless-first | Target cost: $200-500/month
 
-This repository contains comprehensive architecture documentation and a cost-optimized, production-ready infrastructure foundation.
+See [developer/project-status.md](developer/project-status.md) for detailed tracking.
 
-## 🏗️ Architecture Overview
-
-Deal Finder is a **multi-agent AI system** built on AWS with Apache technologies:
+## Architecture
 
 ```
-RSS Feeds → Scanner Agent → Kafka Streaming → Ensemble ML Models → Evaluation → Notifications
+RSS Feeds → Lambda (Scanner) → Step Functions → Lambda (Evaluator) → SNS → Pushover/Email
+                                                      ↕
+                                                Aurora + OpenSearch
+                                                      ↕
+                                                Bedrock (Claude)
 ```
 
-### Key Components
+### Agent Architecture
+- **ScannerAgent**: Scrapes RSS feeds for deals (Lambda)
+- **EvaluatorAgent**: Estimates prices via Bedrock, calculates discounts (Lambda)
+- **MessengerAgent**: Generates personalized notifications using Claude, dispatches via SNS (Lambda)
 
-- **Agent Architecture**: Scanner, Ensemble, Messaging, and Autonomous Planning agents
-- **Orchestration**: AWS Step Functions coordinating agent workflows
-- **Streaming**: Apache Kafka (AWS MSK) for event-driven data flow
-- **Vector DB**: AWS OpenSearch for similarity search and recommendations
-- **Batch Processing**: Apache Spark (AWS EMR) for analytics and model training
-- **Notifications**: Multi-channel delivery (Pushover, Email, SMS, WebSocket)
+### Orchestration
+AWS Step Functions coordinates the pipeline:
+```
+EventBridge (schedule) → Scanner → Evaluate → Decide (discount > threshold?) → Notify → Update State
+```
 
-## 📊 System Capabilities
+### Data Flow
+- **Messaging:** SQS queues with dead letter queues for reliability, SNS for fan-out notifications
+- **Storage:** Aurora PostgreSQL (relational), OpenSearch (vector DB with k-NN), DynamoDB (state/cache with TTL), S3 (archives)
+- **LLM:** AWS Bedrock (Claude) for price estimation and notification crafting
 
-- **Real-time Deal Discovery**: Scan 1000+ deals/hour from RSS feeds
-- **Ensemble Price Estimation**: Combine multiple ML models for accurate pricing
-- **Smart Filtering**: Notify only when discount exceeds configurable threshold
-- **Personalization**: AI-generated messages tailored to user preferences
-- **High Availability**: 99.9% uptime with multi-AZ deployment
-
-## 🛠️ Technology Stack
+## Technology Stack
 
 ### Backend
-- **Language**: Python 3.12
-- **API Framework**: FastAPI with Pydantic
-- **Orchestration**: AWS Lambda + Step Functions
-- **Compute**: ECS Fargate, AWS Lambda
+- **Language:** Python 3.12
+- **API Framework:** FastAPI with Pydantic
+- **Compute:** AWS Lambda + Step Functions
+- **Package Manager:** uv
 
 ### Data Layer
-- **Streaming**: Apache Kafka (AWS MSK)
-- **Batch Processing**: Apache Spark (AWS EMR)
-- **Vector Database**: AWS OpenSearch with k-NN plugin
-- **Relational DB**: AWS RDS Aurora PostgreSQL
-- **NoSQL**: AWS DynamoDB
-- **Object Storage**: AWS S3
+- **Relational DB:** AWS Aurora PostgreSQL Serverless v2
+- **Vector Database:** AWS OpenSearch with k-NN plugin
+- **NoSQL/Cache:** AWS DynamoDB (with TTL)
+- **Object Storage:** AWS S3
+- **Messaging:** SQS (queues + DLQ), SNS (fan-out)
 
-### ML & AI
-- **LLM**: AWS Bedrock (Claude 3.5 Sonnet)
-- **Model Serving**: AWS SageMaker
-- **Model Types**: Specialist, Frontier, Neural Network ensemble
-
-### Frontend
-- **Framework**: React.js with TypeScript
-- **UI Library**: Material-UI
-- **Visualization**: Plotly.js
-- **Real-time**: WebSocket for live updates
+### AI
+- **LLM:** AWS Bedrock (Claude) for price estimation and notification crafting
 
 ### Infrastructure
-- **IaC**: Terraform
-- **CI/CD**: GitHub Actions / AWS CodePipeline
-- **Monitoring**: Prometheus, Grafana, CloudWatch, X-Ray
-- **Secrets**: AWS Secrets Manager
+- **IaC:** Terraform (remote state in S3 + DynamoDB locking)
+- **Monitoring:** CloudWatch (logs, alarms, dashboard, cost anomaly detection)
+- **Secrets:** AWS Secrets Manager
 
-## 📁 Repository Structure
+## Repository Structure
 
 ```
 dealfinder/
-├── README.md                      # This file
-├── AGENTS.md                      # Warp AI agent guidance (WARP rules)
-├── PRODUCTION_PLAN.md             # Complete production architecture plan
+├── AGENTS.md                      # AI agent guidance
+├── PRODUCTION_PLAN.md             # System architecture and phase plan
 ├── PROCESS_FLOWS.md               # Visual workflow diagrams
 ├── TECHNOLOGY_RATIONALE.md        # Technology selection reasoning
-├── .github/
-│   ├── workflows/
-│   │   ├── ci.yml                # CI pipeline (lint, test, security)
-│   │   └── cd.yml                # CD pipeline (deploy infrastructure)
-│   └── dependabot.yml            # Automated dependency updates
 ├── developer/
 │   ├── developer_journal.md       # Development session logs
-│   └── project-status.md          # Detailed project timeline and status
-├── docs/
-│   └── APACHE_ZEPPELIN.md         # Zeppelin documentation
-├── infrastructure/                # Terraform IaC ✅ DEPLOYED
-│   ├── bootstrap.sh              # Backend setup script
-│   ├── environments/
-│   │   └── dev/                  # Dev environment (live)
+│   └── project-status.md          # Project timeline and status
+├── infrastructure/                # Terraform IaC
+│   ├── bootstrap.sh               # Backend setup script (one-time)
+│   ├── environments/dev/          # Dev environment (deployed)
 │   └── modules/
-│       ├── networking/           # VPC, subnets, endpoints
-│       ├── data/                 # S3, DynamoDB
-│       └── monitoring/           # CloudWatch, alarms
-├── src/                           # Source code
-│   └── dealfinder/               # Python package structure
-├── tests/                         # Test suite ✅ 97 TESTS PASSING
-│   ├── unit/                     # Unit tests for configs
-│   └── infrastructure/           # Infrastructure validation
-├── socialmedia/                   # Social media content
-└── scripts/                       # Utility scripts (TBD)
+│       ├── networking/            # VPC, subnets, VPC endpoints
+│       ├── data/                  # S3, DynamoDB, Aurora, OpenSearch
+│       └── monitoring/            # CloudWatch logs, alarms, dashboard
+├── src/dealfinder/                # Python package
+│   ├── db/
+│   │   ├── models.py              # SQLAlchemy ORM models (5 models, 3 enums)
+│   │   ├── connection.py          # Async engine and session management
+│   │   └── alembic/               # Database migrations
+│   ├── data/
+│   │   └── repository.py          # Repository pattern (5 repository classes)
+│   └── search/
+│       ├── client.py              # OpenSearch client (k-NN, bulk, CRUD)
+│       ├── embeddings.py          # Embedding service (abstract provider pattern)
+│       └── index.py               # Index management and mappings
+├── tests/
+│   ├── unit/                      # Unit tests (models, repositories, search)
+│   └── infrastructure/            # AWS resource validation tests
+└── pyproject.toml                 # Dependencies, tool config, build settings
 ```
 
-## 📚 Documentation
-
-- **[developer/project-status.md](developer/project-status.md)**: Project timeline, phase breakdown, and current status
-- **[PRODUCTION_PLAN.md](PRODUCTION_PLAN.md)**: Detailed system design, component specifications, and migration strategy
-- **[PROCESS_FLOWS.md](PROCESS_FLOWS.md)**: Visual diagrams of data flows, pipelines, and workflows
-- **[TECHNOLOGY_RATIONALE.md](TECHNOLOGY_RATIONALE.md)**: Reasoning behind each technology choice with alternatives considered
-- **[AGENTS.md](AGENTS.md)**: Context for Warp AI agent when working in this repository
-- **[infrastructure/README.md](infrastructure/README.md)**: Infrastructure deployment guide
-- **[infrastructure/TERRAFORM_GUIDE.md](infrastructure/TERRAFORM_GUIDE.md)**: Terraform best practices and workflows
-- **[docs/APACHE_ZEPPELIN.md](docs/APACHE_ZEPPELIN.md)**: Guide to Apache Zeppelin for interactive Spark development
-
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -125,7 +104,6 @@ dealfinder/
 - Terraform 1.14+
 - Python 3.12+
 - uv package manager
-- Git
 
 ### Development Setup
 
@@ -134,8 +112,8 @@ dealfinder/
 git clone https://github.com/Bytes0211/dealfinder.git
 cd dealfinder
 
-# Install Python dependencies
-uv pip install -e .
+# Install dependencies (including dev tools)
+uv pip install -e ".[dev]"
 
 # Bootstrap Terraform backend (one-time)
 cd infrastructure
@@ -153,7 +131,10 @@ terraform apply
 ### Running Tests
 
 ```bash
-# Run all unit tests
+# Run all tests
+pytest tests/ -v
+
+# Run unit tests only
 pytest tests/unit/ -v
 
 # Run infrastructure validation tests
@@ -163,108 +144,84 @@ pytest tests/infrastructure/ -v
 pytest tests/ --cov=src --cov-report=html
 ```
 
-## 📈 Performance Targets
+## Performance Targets
 
-| Metric | Target | Purpose |
-|--------|--------|---------|
-| **API Latency** | < 500ms (P95) | Responsive user experience |
-| **Notification Delivery** | < 30 seconds | Real-time alerts |
-| **Throughput** | 1000 deals/hour | Scale for multiple RSS sources |
-| **Availability** | 99.9% uptime | Reliable service |
-| **Error Rate** | < 0.1% | High-quality notifications |
+- **Pipeline reliability:** >95% successful executions
+- **API latency:** <1s P95
+- **Notification delivery:** <2 minutes from discovery
+- **Monthly cost:** <$500
 
-## 💰 Cost Estimation
+## Cost Management
 
-**Estimated Monthly Costs** (1000 deals/hour, 10K users): **$1,750 - $2,900**
+Feature flags keep idle dev costs at ~$4-10/month:
 
-Major cost drivers:
-- AWS MSK (Kafka): $400-600
-- OpenSearch: $300-500
-- ECS Fargate: $200-300
-- RDS Aurora: $150-250
-- AWS Bedrock: $200-400
+- `enable_nat_gateway`: false (saves ~$100/month)
+- `enable_aurora`: false (saves $50-100/month)
+- `enable_opensearch`: false (saves $25-75/month)
 
-See [TECHNOLOGY_RATIONALE.md](TECHNOLOGY_RATIONALE.md#cost-projection) for detailed breakdown.
+**Production target:** $200-500/month
 
-## 🗺️ Roadmap
+## Roadmap
 
-### Phase 1: Infrastructure Setup (Weeks 1-2) ✅ COMPLETE
-- [x] Provision AWS accounts and VPC
-- [x] Set up CI/CD pipeline  
-- [x] Deploy development environment
-- [x] Implement monitoring and cost controls
-- [x] Create comprehensive test suite (97 tests)
+### Phase 1: Infrastructure Setup (Weeks 1-2) — COMPLETE
+- Terraform backend, VPC, networking, S3, DynamoDB
+- CloudWatch monitoring (logs, alarms, dashboard, cost anomaly)
 
-### Phase 2: Data Layer (Weeks 3-4) ✅ COMPLETE
-- [x] Aurora PostgreSQL Serverless v2 Terraform module
-- [x] OpenSearch with k-NN plugin Terraform module
-- [x] SQLAlchemy ORM models (5 models, 3 enums)
-- [x] Alembic migration framework
-- [x] OpenSearch client with vector search
-- [x] Repository pattern data access layer
+### Phase 2: Data Layer (Weeks 3-4) — COMPLETE
+- SQLAlchemy ORM models and Alembic migrations
+- Repository pattern data access layer
+- OpenSearch client with vector search
+- Embedding service with provider abstraction
 
-### Phase 3: Application Development (Weeks 5-8)
-- [ ] Implement Lambda agents
-- [ ] Build FastAPI backend
-- [ ] Develop React frontend
-- [ ] Create Step Functions workflows
+### Phase 3: Core Pipeline (Weeks 5-7) — NEXT
+- Scanner Agent Lambda (RSS parsing)
+- Bedrock integration (price estimation)
+- Evaluator Agent Lambda
+- Step Functions state machine
+- SQS queues + EventBridge schedule
 
-### Phase 4: Streaming Infrastructure (Weeks 9-10)
-- [ ] Deploy MSK cluster
-- [ ] Implement Kafka producers/consumers
-- [ ] Create stream processing jobs
+### Phase 4: Notifications + API (Weeks 8-9)
+- Messenger Agent Lambda (Bedrock + Pushover)
+- SES email + SNS fan-out
+- FastAPI REST API + API Gateway + Cognito auth
 
-### Phase 5: Model Deployment (Weeks 11-12)
-- [ ] Migrate to AWS Bedrock
-- [ ] Deploy models to SageMaker
-- [ ] Implement A/B testing
+### Phase 5: Polish + Deploy (Week 10)
+- Integration tests (end-to-end)
+- Production Terraform environment
+- Production deploy + validation
 
-### Phase 6: Testing & Validation (Weeks 13-14)
-- [ ] Integration testing
-- [ ] Load testing
-- [ ] Security testing
+## Documentation
 
-### Phase 7: Production Deployment (Weeks 15-16)
-- [ ] Blue-green deployment
-- [ ] Traffic migration
-- [ ] Monitoring and optimization
+- **[PRODUCTION_PLAN.md](PRODUCTION_PLAN.md)** — System design and migration phases
+- **[PROCESS_FLOWS.md](PROCESS_FLOWS.md)** — Visual data flow diagrams
+- **[TECHNOLOGY_RATIONALE.md](TECHNOLOGY_RATIONALE.md)** — Technology choice reasoning
+- **[developer/project-status.md](developer/project-status.md)** — Progress tracking
+- **[AGENTS.md](AGENTS.md)** — AI agent context for this repository
+- **[infrastructure/TERRAFORM_GUIDE.md](infrastructure/TERRAFORM_GUIDE.md)** — Terraform best practices
 
-### Phase 8: Documentation & Training (Weeks 17-18)
-- [ ] Complete documentation
-- [ ] Team training
-- [ ] Runbooks and procedures
+## Not in Scope (Intentionally Removed)
 
-## 🔒 Security
+The following were removed during the Feb 2026 scope revision to keep the project realistic for a solo developer. See PRODUCTION_PLAN.md "Future Enhancements" for triggers to re-add.
 
-- **Authentication**: AWS Cognito with OAuth 2.0
-- **Authorization**: IAM roles for service-to-service
-- **Secrets**: AWS Secrets Manager (never hardcoded)
-- **Network**: Private VPC subnets for backend services
-- **Encryption**: TLS 1.3 in transit, KMS at rest
-- **Compliance**: GDPR-ready with data retention policies
+- Kafka/MSK, Spark/EMR, ECS Fargate, SageMaker
+- Apache APISIX, React frontend
+- Prometheus/Grafana, ElastiCache
 
-## 🤝 Contributing
+## Security
 
-*To be added when project transitions to active development*
+- **Authorization:** IAM roles for service-to-service
+- **Secrets:** AWS Secrets Manager (never hardcoded)
+- **Network:** Private VPC subnets for backend services
+- **Encryption:** KMS at rest, TLS in transit
 
-## 📄 License
-
-*To be determined*
-
-## 🔗 Related Projects
-
-This system is being transformed from a Jupyter notebook prototype. Key migrations:
-
-- **UI**: Gradio → React.js + TypeScript
-- **LLM**: OpenAI API → AWS Bedrock (Claude)
-- **Vector DB**: ChromaDB → AWS OpenSearch
-- **Orchestration**: Synchronous → AWS Step Functions
-- **Storage**: Local files → S3 + DynamoDB + Aurora
-
-## 📞 Contact
+## Contact
 
 *To be added*
 
+## License
+
+*To be determined*
+
 ---
 
-**Built with** ☁️ AWS | 🔥 Apache Technologies | 🤖 AI/ML | ⚡ Event-Driven Architecture
+**Built with** AWS Lambda · Step Functions · Bedrock · Aurora · OpenSearch · Terraform

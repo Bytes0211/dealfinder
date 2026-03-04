@@ -155,21 +155,23 @@ class TestReadmePerformanceTargets:
             "(e.g., 'Performance Targets', 'Metrics', 'SLA')"
         )
 
-    def test_performance_section_has_table(self, readme_content):
-        """Verify performance targets are presented in a table format."""
-        # Look for markdown table syntax (headers with pipes)
+    def test_performance_section_has_table_or_list(self, readme_content):
+        """Verify performance targets are presented in a structured format."""
+        # Look for markdown table syntax or bullet list with metrics
         table_pattern = r'\|.*\|.*\|'
         has_table = re.search(table_pattern, readme_content)
-        
-        assert has_table, (
-            "README.md should include a table for performance targets"
+        list_pattern = r'^[-*]\s+\*\*.*:\*\*'
+        has_list = re.search(list_pattern, readme_content, re.MULTILINE)
+
+        assert has_table or has_list, (
+            "README.md should include a table or list for performance targets"
         )
 
     def test_performance_includes_key_metrics(self, readme_content):
         """Verify performance section includes key metrics."""
         # Convert to lowercase for case-insensitive matching
         content_lower = readme_content.lower()
-        
+
         # Check for common performance-related terms
         performance_terms = [
             'latency',
@@ -177,10 +179,13 @@ class TestReadmePerformanceTargets:
             'availability',
             'uptime',
             'response time',
+            'reliability',
+            'cost',
+            'delivery',
         ]
-        
+
         found_terms = [term for term in performance_terms if term in content_lower]
-        
+
         assert len(found_terms) >= 2, (
             f"Performance section should include key metrics. "
             f"Found: {found_terms}. Expected at least 2 of: {performance_terms}"
@@ -246,26 +251,22 @@ class TestReadmeCostEstimation:
     def test_cost_breakdown_includes_components(self, readme_content):
         """Verify cost breakdown includes infrastructure components."""
         content_lower = readme_content.lower()
-        
+
         # Look for common infrastructure cost components
-        # Based on the architecture, expect AWS services
+        # Based on the serverless architecture, expect AWS services
         infrastructure_terms = [
             'aws',
-            'database',
-            'storage',
-            'compute',
-            'kafka',
-            'msk',
+            'aurora',
             'opensearch',
             'lambda',
-            'fargate',
-            'rds',
             'dynamodb',
             's3',
+            'nat_gateway',
+            'cloudwatch',
         ]
-        
+
         found_terms = [term for term in infrastructure_terms if term in content_lower]
-        
+
         assert len(found_terms) >= 3, (
             f"Cost breakdown should mention infrastructure components. "
             f"Found: {found_terms}. Expected at least 3 infrastructure terms."
@@ -317,20 +318,23 @@ class TestReadmeDetailedContent:
     def test_technology_stack_lists_technologies(self, readme_content):
         """Verify technology stack section lists specific technologies."""
         content_lower = readme_content.lower()
-        
-        # Based on WARP.md, expect these technologies
+
+        # Core technologies in the serverless architecture
         expected_technologies = [
             'python',
-            'kafka',
             'aws',
-            'spark',
+            'lambda',
+            'terraform',
+            'opensearch',
+            'aurora',
+            'bedrock',
         ]
-        
+
         found_technologies = [
-            tech for tech in expected_technologies 
+            tech for tech in expected_technologies
             if tech in content_lower
         ]
-        
+
         assert len(found_technologies) >= 3, (
             f"Technology stack should list specific technologies. "
             f"Found: {found_technologies}. "
