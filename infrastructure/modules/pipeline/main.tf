@@ -368,9 +368,21 @@ resource "aws_iam_role_policy" "step_functions_inline" {
 # Step Functions State Machine
 # ─────────────────────────────────────────────
 
+resource "aws_cloudwatch_log_group" "sfn_pipeline" {
+  name              = "/aws/states/${local.prefix}-pipeline"
+  retention_in_days = var.log_retention_days
+  tags              = var.tags
+}
+
 resource "aws_sfn_state_machine" "pipeline" {
   name     = "${local.prefix}-pipeline"
   role_arn = aws_iam_role.step_functions.arn
+
+  logging_configuration {
+    log_destination        = "${aws_cloudwatch_log_group.sfn_pipeline.arn}:*"
+    include_execution_data = false
+    level                  = "ERROR"
+  }
 
   definition = jsonencode({
     Comment = "Deal Finder pipeline: Scan → Evaluate → Notify"
@@ -384,7 +396,7 @@ resource "aws_sfn_state_machine" "pipeline" {
         Next = "ProcessDeals"
         Retry = [
           {
-            ErrorEquals     = ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException"]
+            ErrorEquals     = ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException"]
             IntervalSeconds = 2
             MaxAttempts     = 3
             BackoffRate     = 2.0
@@ -418,7 +430,7 @@ resource "aws_sfn_state_machine" "pipeline" {
               Next = "IsHighValue"
               Retry = [
                 {
-                  ErrorEquals     = ["Lambda.ServiceException", "Lambda.AWSLambdaException"]
+                  ErrorEquals     = ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException"]
                   IntervalSeconds = 2
                   MaxAttempts     = 2
                   BackoffRate     = 2.0
@@ -453,16 +465,31 @@ resource "aws_sfn_state_machine" "pipeline" {
                 "MessageBody.$" = "$.deal_id"
               }
               ResultPath = null
-              Next       = "DealProcessed"
+              Retry = [
+                {
+                  ErrorEquals     = ["States.TaskFailed"]
+                  IntervalSeconds = 2
+                  MaxAttempts     = 3
+                  BackoffRate     = 2.0
+                }
+              ]
+              Catch = [
+                {
+                  ErrorEquals = ["States.ALL"]
+                  Next        = "DealProcessed"
+                  ResultPath  = "$.error"
+                }
+              ]
+              Next = "DealProcessed"
             }
             DealProcessed = {
               Type = "Pass"
               End  = true
             }
             DealFailed = {
-              Type  = "Fail"
-              Error = "DealEvaluationError"
-              Cause = "EvaluatorAgent failed; see CloudWatch logs for details"
+              Type    = "Pass"
+              Comment = "Absorbs per-deal Lambda failures so the Map continues processing the remaining batch. CloudWatch DLQ alarms provide failure alerting without requiring a fail-fast stop."
+              End     = true
             }
           }
         }
@@ -481,6 +508,8 @@ resource "aws_sfn_state_machine" "pipeline" {
       }
     }
   })
+
+  depends_on = [aws_cloudwatch_log_group.sfn_pipeline]
 
   tags = merge(var.tags, { Name = "${local.prefix}-pipeline" })
 }
