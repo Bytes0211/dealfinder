@@ -119,21 +119,26 @@ class ScannerAgent:
                 deals_discovered: Total count of new deals persisted.
                 scanned_at: ISO-8601 timestamp of the scan start.
         """
+        new_deal_ids: list[str] = []
+        sources_scanned: int = 0
+
         async with get_async_session() as session:
             source_repo = DealSourceRepository(session)
             sources = await source_repo.find_active_sources()
+            sources_scanned = len(sources)
 
-            logger.info(f"Starting scan of {len(sources)} active sources")
+            logger.info(f"Starting scan of {sources_scanned} active sources")
 
-            all_new_deals: list[Deal] = []
             for source in sources:
                 new_deals = await self.scan_source(source, session)
-                all_new_deals.extend(new_deals)
+                # Collect scalar IDs while the session is still open so that
+                # Deal objects are not accessed in a detached / expired state.
+                new_deal_ids.extend(str(d.id) for d in new_deals)
 
         return {
-            "new_deal_ids": [str(d.id) for d in all_new_deals],
-            "sources_scanned": len(sources),
-            "deals_discovered": len(all_new_deals),
+            "new_deal_ids": new_deal_ids,
+            "sources_scanned": sources_scanned,
+            "deals_discovered": len(new_deal_ids),
             "scanned_at": datetime.now(timezone.utc).isoformat(),
         }
 

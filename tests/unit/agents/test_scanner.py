@@ -9,23 +9,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from sqlalchemy import event
-from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import sessionmaker
-
-# Register PostgreSQL types for SQLite compatibility
-@compiles(JSONB, "sqlite")
-def _jsonb_sqlite(type_, compiler, **kw):
-    """Render JSONB as JSON for SQLite."""
-    return "JSON"
-
-
-@compiles(PGUUID, "sqlite")
-def _pguuid_sqlite(type_, compiler, **kw):
-    """Render PostgreSQL UUID as CHAR(32) for SQLite."""
-    return "CHAR(32)"
-
 
 from dealfinder.agents.config import AgentConfig
 from dealfinder.agents.scanner import ScannerAgent
