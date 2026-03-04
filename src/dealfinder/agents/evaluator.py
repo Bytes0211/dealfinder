@@ -160,14 +160,17 @@ class EvaluatorAgent:
             if is_high_value:
                 await deal_repo.mark_as_high_value(
                     deal_id,
-                    float(result.estimated_price),
-                    float(result.confidence),
+                    result.estimated_price,
+                    result.confidence,
                 )
 
             updated_deal = await deal_repo.update_status(deal_id, DealStatus.EVALUATED)
-            if updated_deal:
-                updated_deal.discount_percentage = discount
-                await session.flush()
+            if updated_deal is None:
+                raise RuntimeError(
+                    f"Deal {deal_id} vanished during evaluation — possible concurrent deletion"
+                )
+            updated_deal.discount_percentage = discount
+            await session.flush()
 
             logger.info(
                 f"Evaluated deal {deal_id}: ${sale_price} → est. ${result.estimated_price} "
