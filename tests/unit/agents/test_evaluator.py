@@ -18,7 +18,6 @@ from dealfinder.agents.bedrock import PriceEstimationResult
 from dealfinder.agents.config import AgentConfig
 from dealfinder.agents.evaluator import EvaluatorAgent
 from dealfinder.data.repository import DealRepository, PriceEstimateRepository
-from dealfinder.db.connection import async_session_factory
 from dealfinder.db.models import Base, Deal, DealSource, DealStatus
 
 

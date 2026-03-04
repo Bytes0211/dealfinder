@@ -142,16 +142,16 @@ terraform apply
 
 ```bash
 # Run all tests
-pytest tests/ -v
+uv run pytest tests/ -v
 
 # Run unit tests only
-pytest tests/unit/ -v
+uv run pytest tests/unit/ -v
 
 # Run infrastructure validation tests
-pytest tests/infrastructure/ -v
+uv run pytest tests/infrastructure/ -v
 
 # Run with coverage
-pytest tests/ --cov=src --cov-report=html
+uv run pytest tests/ --cov=src --cov-report=html
 ```
 
 ## Performance Targets

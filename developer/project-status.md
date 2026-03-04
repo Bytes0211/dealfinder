@@ -24,7 +24,7 @@ Deal Finder is an AI-powered deal hunting autonomous agent system being transfor
 - Task 1: ████████ [COMPLETE] Terraform backend bootstrap
 - Task 2: ████████ [COMPLETE] VPC & networking deployment
 - Task 3: ████████ [COMPLETE] Storage layer (S3, DynamoDB)
-- Task 4: ████████ [COMPLETE] CI/CD pipeline configuration
+- Task 4: ░░░░░░░░ [PENDING] CI/CD pipeline configuration
 - Task 5: ████████ [COMPLETE] CloudWatch monitoring setup
 
 ### Phase 2 (Weeks 3-4): Data Layer
@@ -34,12 +34,12 @@ Deal Finder is an AI-powered deal hunting autonomous agent system being transfor
 - Task 10: ████████ [COMPLETE] Unit tests for all modules
 
 ### Phase 3 (Weeks 5-7): Core Pipeline
-|- Task 11-13: ████████ [COMPLETE] Scanner Agent Lambda (RSS parsing)
-|- Task 14-15: ████████ [COMPLETE] Bedrock integration (price estimation)
-|- Task 16-17: ████████ [COMPLETE] Evaluator Agent Lambda
-|- Task 18-19: ████████ [COMPLETE] Step Functions state machine
-|- Task 20: ████████ [COMPLETE] SQS queues + EventBridge schedule
-|- Task 21: ████████ [COMPLETE] Unit tests (36 tests); integration tests pending real infra
+- Task 11-13: ████████ [COMPLETE] Scanner Agent Lambda (RSS parsing)
+- Task 14-15: ████████ [COMPLETE] Bedrock integration (price estimation)
+- Task 16-17: ████████ [COMPLETE] Evaluator Agent Lambda
+- Task 18-19: ████████ [COMPLETE] Step Functions state machine
+- Task 20: ████████ [COMPLETE] SQS queues + EventBridge schedule
+- Task 21: ████████ [COMPLETE] Unit tests (37 tests); integration tests pending real infra
 
 ### Phase 4 (Weeks 8-9): Notifications + API
 - Task 22-23: ░░░░░░░░ [PENDING] Messenger Agent (Bedrock + Pushover)
@@ -84,7 +84,7 @@ Deal Finder is an AI-powered deal hunting autonomous agent system being transfor
 - ✅ 3 DynamoDB tables (deal-state, agent-state, user-sessions)
 - ⏸️ GitHub Actions CI/CD (not yet created — `.github/workflows/` does not exist)
 - ✅ CloudWatch monitoring (12 resources: logs, alarms, dashboard, cost anomaly)
-- ✅ Unit test suite (187 passing, 41 skipped after March 4 cleanup)
+- ✅ Unit test suite (224 passing, 41 skipped after Phase 3 + PR review fixes)
 - ✅ Infrastructure documentation
 
 **Cost:** ~$4-10/month
@@ -143,7 +143,7 @@ Deal Finder is an AI-powered deal hunting autonomous agent system being transfor
 - ✅ AgentConfig pydantic-settings (`src/dealfinder/agents/config.py`)
 - ✅ Terraform pipeline module (SQS ×4, Lambda ×2, Step Functions, EventBridge, IAM)
 - ✅ Pipeline module wired into `infrastructure/environments/dev/`
-- ✅ Unit tests: 36 new tests (Bedrock, Scanner, Evaluator)
+- ✅ Unit tests: 37 new tests (Bedrock, Scanner, Evaluator)
 
 **Success Criteria:**
 - ✅ Scanner persists new deals; skips duplicates
@@ -304,7 +304,7 @@ Deal Finder is an AI-powered deal hunting autonomous agent system being transfor
 
 ### Immediate
 1. ⏸️ Set up GitHub Actions CI/CD (`.github/workflows/ci.yml`, `cd.yml`)
-2. ⏸️ Commit Phase 3 changes to GitHub
+2. ✅ Phase 3 + PR review fixes committed to `dev`
 3. ⏸️ Tag release v0.3.0-phase3
 
 ### Phase 4 (Next)
@@ -367,7 +367,8 @@ Deal Finder is an AI-powered deal hunting autonomous agent system being transfor
 | 2.1 | Feb 18, 2026 03:12 | scotton/Warp | Documentation update - All docs synchronized |
 | 3.0 | Feb 18, 2026 | scotton | **Scope revision** - 5 phases, serverless-first, $200-500/mo target |
 | 3.1 | Mar 4, 2026 | scotton/Warp | **Project audit** - Fixed docs vs reality: rewrote README, fixed broken tests (187 pass/41 skip/0 fail), removed stale CI/CD tests, cleaned pyproject.toml (removed redis, separated dev deps, added aiosqlite), deleted empty emr/msk dirs, corrected CI/CD status to not-started, updated AGENTS.md repo class count |
-| 4.0 | Mar 4, 2026 | scotton/Warp | **Phase 3 complete** - ScannerAgent, BedrockPriceEstimator, EvaluatorAgent Lambdas; Terraform pipeline module (SQS, Lambda, Step Functions, EventBridge); 36 new unit tests (223 passing total) |
+| 4.0 | Mar 4, 2026 | scotton/Warp | **Phase 3 complete** - ScannerAgent, BedrockPriceEstimator, EvaluatorAgent Lambdas; Terraform pipeline module (SQS, Lambda, Step Functions, EventBridge); 37 new unit tests (224 passing total) |
+| 4.1 | Mar 4, 2026 | scotton/Warp | **PR review fixes** - EventBridge IAM principal, SHA-256 dedup fallback, feedparser + Bedrock run_in_executor, _MODEL_NAME removed, @compiles consolidated, ORM session safety, Step Functions Fail states, AsyncSession type hint |
 
 ---
 

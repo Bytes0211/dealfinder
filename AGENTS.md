@@ -159,7 +159,7 @@ Feature flags keep idle costs at ~$4-10/month:
 - **Mocking:** Prefer real implementations (MockEmbeddingProvider, in-memory DB) over unittest.mock patching.
 - **Structure:** Tests grouped into classes (`TestDealRepository`, `TestUserRepository`). Each test has a docstring.
 - **Assertions:** Plain `assert` statements. Use `pytest.raises()` for exceptions.
-- **Run:** `pytest tests/ -v`
+- **Run:** `uv run pytest tests/ -v`
 
 ## Git Conventions
 
@@ -186,7 +186,7 @@ Feature flags keep idle costs at ~$4-10/month:
 
 3. **Tests**
    - Create unit tests for all new code
-   - Run `pytest tests/ -v` and verify all pass before marking complete
+   - Run `uv run pytest tests/ -v` and verify all pass before marking complete
 
 ## Key Design Decisions
 

@@ -169,5 +169,9 @@ module "pipeline" {
   enable_schedule     = var.enable_pipeline_schedule
   schedule_expression = var.pipeline_schedule_expression
 
+  db_secret_arn = var.db_secret_arn
+  db_host       = try(module.aurora[0].cluster_endpoint, "")
+  db_name       = var.aurora_database_name
+
   tags = local.common_tags
 }

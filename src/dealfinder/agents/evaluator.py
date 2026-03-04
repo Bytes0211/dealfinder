@@ -19,6 +19,7 @@ from dealfinder.db.models import DealStatus, PriceEstimate
 
 logger = logging.getLogger(__name__)
 
+
 class EvaluatorAgent:
     """Evaluates deals by estimating fair market price and calculating discounts.
 

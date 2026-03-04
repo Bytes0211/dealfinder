@@ -98,3 +98,22 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+# Aurora database connection
+variable "db_secret_arn" {
+  description = "ARN of Secrets Manager secret containing Aurora DB credentials (DB_USER and DB_PASSWORD)"
+  type        = string
+  default     = ""
+}
+
+variable "db_host" {
+  description = "Aurora cluster writer endpoint hostname"
+  type        = string
+  default     = ""
+}
+
+variable "db_name" {
+  description = "Aurora database name"
+  type        = string
+  default     = "dealfinder"
+}

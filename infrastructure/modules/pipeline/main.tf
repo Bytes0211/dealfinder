@@ -250,6 +250,9 @@ resource "aws_lambda_function" "scanner" {
       DEALFINDER_DISCOUNT_THRESHOLD = tostring(var.discount_threshold)
       DEALFINDER_BEDROCK_REGION     = var.aws_region
       DEALFINDER_BEDROCK_MODEL_ID   = var.bedrock_model_id
+      DB_HOST                       = var.db_host
+      DB_NAME                       = var.db_name
+      DB_SECRET_ARN                 = var.db_secret_arn
     }
   }
 
@@ -282,6 +285,9 @@ resource "aws_lambda_function" "evaluator" {
       DEALFINDER_DISCOUNT_THRESHOLD = tostring(var.discount_threshold)
       DEALFINDER_BEDROCK_REGION     = var.aws_region
       DEALFINDER_BEDROCK_MODEL_ID   = var.bedrock_model_id
+      DB_HOST                       = var.db_host
+      DB_NAME                       = var.db_name
+      DB_SECRET_ARN                 = var.db_secret_arn
     }
   }
 
