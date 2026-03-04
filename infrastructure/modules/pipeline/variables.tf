@@ -99,6 +99,11 @@ variable "tags" {
   default     = {}
 }
 
+variable "vpc_cidr" {
+  description = "CIDR block of the VPC — used to scope PostgreSQL egress to the VPC only"
+  type        = string
+}
+
 # Aurora database connection
 variable "db_secret_arn" {
   description = "ARN of Secrets Manager secret containing Aurora DB credentials (DB_USER and DB_PASSWORD)"

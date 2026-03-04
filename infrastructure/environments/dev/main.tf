@@ -161,6 +161,7 @@ module "pipeline" {
   environment        = var.environment
   aws_region         = var.aws_region
   vpc_id             = module.networking.vpc_id
+  vpc_cidr           = module.networking.vpc_cidr
   private_subnet_ids = module.networking.private_subnet_ids
 
   log_retention_days  = var.log_retention_days

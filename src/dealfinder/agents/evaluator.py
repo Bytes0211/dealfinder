@@ -146,6 +146,7 @@ class EvaluatorAgent:
                 )
             except ClientError as e:
                 if e.response["Error"]["Code"] in _TRANSIENT_BEDROCK_CODES:
+                    await deal_repo.update_status(deal_id, DealStatus.DISCOVERED)
                     raise  # let Step Functions retry via EvaluateDeal Retry block
                 logger.error(f"Bedrock estimation failed for deal {deal_id}: {e}")
                 await deal_repo.update_status(deal_id, DealStatus.REJECTED)

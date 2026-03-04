@@ -153,6 +153,29 @@ def config() -> AgentConfig:
     )
 
 
+@pytest.fixture
+def patch_async_session(engine):
+    """Monkey-patch get_async_session in the evaluator module to use the test engine.
+
+    Replaces the module-level get_async_session with a context manager backed by
+    the in-memory SQLite engine, then restores the original on teardown.
+    """
+    import dealfinder.agents.evaluator as evaluator_module
+    from contextlib import asynccontextmanager
+
+    factory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+    @asynccontextmanager
+    async def _test_session():
+        async with factory() as s:
+            yield s
+
+    original = evaluator_module.get_async_session
+    evaluator_module.get_async_session = _test_session
+    yield
+    evaluator_module.get_async_session = original
+
+
 class TestEvaluatorAgentCalculateDiscount:
     """Tests for EvaluatorAgent._calculate_discount."""
 
@@ -197,31 +220,14 @@ class TestEvaluatorAgentEvaluateDeal:
     """Tests for EvaluatorAgent.evaluate_deal using in-memory SQLite."""
 
     async def test_high_value_deal_marked_correctly(
-        self, engine, deal_with_price: Deal, config: AgentConfig
+        self, patch_async_session, deal_with_price: Deal, config: AgentConfig
     ) -> None:
         """Deal with >20% discount should be marked as high value and EVALUATED."""
         # Estimated price of $300 gives (300-200)/300 = 33% discount
         estimator = _make_estimator(estimated_price=300.0, confidence=0.9)
         agent = EvaluatorAgent(config=config, estimator=estimator)
 
-        # Patch get_async_session to use our test engine
-        factory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-
-        import dealfinder.agents.evaluator as evaluator_module
-        from contextlib import asynccontextmanager
-
-        @asynccontextmanager
-        async def _test_session():
-            async with factory() as s:
-                yield s
-
-        original = evaluator_module.get_async_session
-        evaluator_module.get_async_session = _test_session
-
-        try:
-            result = await agent.evaluate_deal(deal_with_price.id)
-        finally:
-            evaluator_module.get_async_session = original
+        result = await agent.evaluate_deal(deal_with_price.id)
 
         assert result["status"] == "evaluated"
         assert result["is_high_value"] is True
@@ -229,62 +235,32 @@ class TestEvaluatorAgentEvaluateDeal:
         assert result["estimated_value"] == 300.0
 
     async def test_below_threshold_deal_not_high_value(
-        self, engine, deal_with_price: Deal, config: AgentConfig
+        self, patch_async_session, deal_with_price: Deal, config: AgentConfig
     ) -> None:
         """Deal with <20% discount should be EVALUATED but not marked high value."""
         # Estimated price of $220 gives (220-200)/220 ≈ 9% discount — below threshold
         estimator = _make_estimator(estimated_price=220.0, confidence=0.75)
         agent = EvaluatorAgent(config=config, estimator=estimator)
 
-        factory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-        import dealfinder.agents.evaluator as evaluator_module
-        from contextlib import asynccontextmanager
-
-        @asynccontextmanager
-        async def _test_session():
-            async with factory() as s:
-                yield s
-
-        original = evaluator_module.get_async_session
-        evaluator_module.get_async_session = _test_session
-
-        try:
-            result = await agent.evaluate_deal(deal_with_price.id)
-        finally:
-            evaluator_module.get_async_session = original
+        result = await agent.evaluate_deal(deal_with_price.id)
 
         assert result["status"] == "evaluated"
         assert result["is_high_value"] is False
         assert result["discount_percentage"] < 20.0
 
     async def test_deal_not_found_returns_not_found_status(
-        self, engine, config: AgentConfig
+        self, patch_async_session, config: AgentConfig
     ) -> None:
         """Non-existent deal_id should return not_found status."""
         agent = EvaluatorAgent(config=config, estimator=MagicMock())
 
-        factory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-        import dealfinder.agents.evaluator as evaluator_module
-        from contextlib import asynccontextmanager
-
-        @asynccontextmanager
-        async def _test_session():
-            async with factory() as s:
-                yield s
-
-        original = evaluator_module.get_async_session
-        evaluator_module.get_async_session = _test_session
-
-        try:
-            result = await agent.evaluate_deal(uuid4())
-        finally:
-            evaluator_module.get_async_session = original
+        result = await agent.evaluate_deal(uuid4())
 
         assert result["status"] == "not_found"
         assert result["is_high_value"] is False
 
     async def test_zero_sale_price_is_evaluated_not_rejected(
-        self, engine, deal_with_zero_sale_price: Deal, config: AgentConfig
+        self, patch_async_session, deal_with_zero_sale_price: Deal, config: AgentConfig
     ) -> None:
         """Deal with sale_price=Decimal('0.00') must be evaluated, not rejected.
 
@@ -295,77 +271,32 @@ class TestEvaluatorAgentEvaluateDeal:
         estimator = _make_estimator(estimated_price=10.0, confidence=0.9)
         agent = EvaluatorAgent(config=config, estimator=estimator)
 
-        factory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-        import dealfinder.agents.evaluator as evaluator_module
-        from contextlib import asynccontextmanager
-
-        @asynccontextmanager
-        async def _test_session():
-            async with factory() as s:
-                yield s
-
-        original = evaluator_module.get_async_session
-        evaluator_module.get_async_session = _test_session
-
-        try:
-            result = await agent.evaluate_deal(deal_with_zero_sale_price.id)
-        finally:
-            evaluator_module.get_async_session = original
+        result = await agent.evaluate_deal(deal_with_zero_sale_price.id)
 
         assert result["status"] == "evaluated"
         assert result["discount_percentage"] == 100.0  # (10 - 0) / 10 * 100
         assert result["is_high_value"] is True
 
     async def test_deal_with_no_price_is_rejected(
-        self, engine, deal_no_price: Deal, config: AgentConfig
+        self, patch_async_session, deal_no_price: Deal, config: AgentConfig
     ) -> None:
         """Deal with neither sale_price nor original_price should be REJECTED."""
         agent = EvaluatorAgent(config=config, estimator=MagicMock())
 
-        factory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-        import dealfinder.agents.evaluator as evaluator_module
-        from contextlib import asynccontextmanager
-
-        @asynccontextmanager
-        async def _test_session():
-            async with factory() as s:
-                yield s
-
-        original = evaluator_module.get_async_session
-        evaluator_module.get_async_session = _test_session
-
-        try:
-            result = await agent.evaluate_deal(deal_no_price.id)
-        finally:
-            evaluator_module.get_async_session = original
+        result = await agent.evaluate_deal(deal_no_price.id)
 
         assert result["status"] == "rejected"
         assert result["is_high_value"] is False
 
     async def test_bedrock_failure_rejects_deal(
-        self, engine, deal_with_price: Deal, config: AgentConfig
+        self, patch_async_session, deal_with_price: Deal, config: AgentConfig
     ) -> None:
         """Bedrock estimation failure should mark deal as REJECTED."""
         failing_estimator = MagicMock()
         failing_estimator.estimate_price.side_effect = RuntimeError("Bedrock timeout")
         agent = EvaluatorAgent(config=config, estimator=failing_estimator)
 
-        factory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-        import dealfinder.agents.evaluator as evaluator_module
-        from contextlib import asynccontextmanager
-
-        @asynccontextmanager
-        async def _test_session():
-            async with factory() as s:
-                yield s
-
-        original = evaluator_module.get_async_session
-        evaluator_module.get_async_session = _test_session
-
-        try:
-            result = await agent.evaluate_deal(deal_with_price.id)
-        finally:
-            evaluator_module.get_async_session = original
+        result = await agent.evaluate_deal(deal_with_price.id)
 
         assert result["status"] == "estimation_failed"
         assert result["is_high_value"] is False
@@ -399,7 +330,7 @@ class TestEvaluatorAgentTransientErrors:
     """Tests for transient Bedrock error handling in EvaluatorAgent.evaluate_deal."""
 
     async def test_internal_server_exception_is_reraised(
-        self, engine, deal_with_price: Deal, config: AgentConfig
+        self, patch_async_session, deal_with_price: Deal, config: AgentConfig
     ) -> None:
         """InternalServerException should propagate so Step Functions can retry."""
         error_response = {"Error": {"Code": "InternalServerException", "Message": "Server error"}}
@@ -407,26 +338,11 @@ class TestEvaluatorAgentTransientErrors:
         failing_estimator.estimate_price.side_effect = ClientError(error_response, "InvokeModel")
         agent = EvaluatorAgent(config=config, estimator=failing_estimator)
 
-        factory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-        import dealfinder.agents.evaluator as evaluator_module
-        from contextlib import asynccontextmanager
-
-        @asynccontextmanager
-        async def _test_session():
-            async with factory() as s:
-                yield s
-
-        original = evaluator_module.get_async_session
-        evaluator_module.get_async_session = _test_session
-
-        try:
-            with pytest.raises(ClientError):
-                await agent.evaluate_deal(deal_with_price.id)
-        finally:
-            evaluator_module.get_async_session = original
+        with pytest.raises(ClientError):
+            await agent.evaluate_deal(deal_with_price.id)
 
     async def test_transient_clienterror_is_reraised(
-        self, engine, deal_with_price: Deal, config: AgentConfig
+        self, patch_async_session, deal_with_price: Deal, config: AgentConfig
     ) -> None:
         """ThrottlingException should propagate so Step Functions can retry.
 
@@ -438,26 +354,11 @@ class TestEvaluatorAgentTransientErrors:
         failing_estimator.estimate_price.side_effect = ClientError(error_response, "InvokeModel")
         agent = EvaluatorAgent(config=config, estimator=failing_estimator)
 
-        factory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-        import dealfinder.agents.evaluator as evaluator_module
-        from contextlib import asynccontextmanager
-
-        @asynccontextmanager
-        async def _test_session():
-            async with factory() as s:
-                yield s
-
-        original = evaluator_module.get_async_session
-        evaluator_module.get_async_session = _test_session
-
-        try:
-            with pytest.raises(ClientError):
-                await agent.evaluate_deal(deal_with_price.id)
-        finally:
-            evaluator_module.get_async_session = original
+        with pytest.raises(ClientError):
+            await agent.evaluate_deal(deal_with_price.id)
 
     async def test_permanent_clienterror_rejects_deal(
-        self, engine, deal_with_price: Deal, config: AgentConfig
+        self, patch_async_session, deal_with_price: Deal, config: AgentConfig
     ) -> None:
         """Non-transient ClientError should mark the deal REJECTED rather than propagate.
 
@@ -469,22 +370,7 @@ class TestEvaluatorAgentTransientErrors:
         failing_estimator.estimate_price.side_effect = ClientError(error_response, "InvokeModel")
         agent = EvaluatorAgent(config=config, estimator=failing_estimator)
 
-        factory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-        import dealfinder.agents.evaluator as evaluator_module
-        from contextlib import asynccontextmanager
-
-        @asynccontextmanager
-        async def _test_session():
-            async with factory() as s:
-                yield s
-
-        original = evaluator_module.get_async_session
-        evaluator_module.get_async_session = _test_session
-
-        try:
-            result = await agent.evaluate_deal(deal_with_price.id)
-        finally:
-            evaluator_module.get_async_session = original
+        result = await agent.evaluate_deal(deal_with_price.id)
 
         assert result["status"] == "estimation_failed"
         assert result["is_high_value"] is False
