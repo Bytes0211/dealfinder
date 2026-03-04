@@ -199,16 +199,20 @@ class TestScannerAgentScanSource:
         assert source.last_successful_at is not None
         assert source.error_count == 0
 
-    async def test_deterministic_hash_deduplicates_entries_without_id(
+    async def test_link_used_as_external_id_when_entry_has_no_id(
         self, session, source: DealSource, config: AgentConfig
     ) -> None:
-        """Entries with no id or link should be deduplicated via title hash, not re-inserted."""
-        # Build an entry where both id and link are falsy
+        """Entries with no RSS id should fall back to link for deduplication.
+
+        The external_id priority is: id > link > sha256 hash. When id is absent
+        but a link is present, the link is used so the entry is still persisted
+        and correctly deduplicated on subsequent scans.
+        """
         entry = MagicMock()
         entry.get = lambda key, default=None: {
             "id": None,
             "title": "No-ID Widget",
-            "link": None,
+            "link": "https://example.com/no-id-widget",
             "summary": "",
             "published": "Mon, 01 Jan 2026 00:00:00 +0000",
             "tags": [],
@@ -222,7 +226,7 @@ class TestScannerAgentScanSource:
             second = await agent.scan_source(source, session)
 
         assert len(first) == 1, "First scan should create one deal"
-        assert len(second) == 0, "Second scan should skip — same hash, not re-inserted"
+        assert len(second) == 0, "Second scan should skip — same link used as external_id"
 
     async def test_returns_empty_on_exception(
         self, session, source: DealSource, config: AgentConfig
@@ -236,6 +240,33 @@ class TestScannerAgentScanSource:
             deals = await agent.scan_source(source, session)
 
         assert deals == []
+
+    async def test_skips_entries_with_no_url(
+        self, session, source: DealSource, config: AgentConfig
+    ) -> None:
+        """Feed entries with no link should be silently skipped.
+
+        Storing an empty string as url is misleading for downstream consumers;
+        entries without a URL are simply omitted from the results.
+        """
+        entry_no_url = MagicMock()
+        entry_no_url.get = lambda key, default=None: {
+            "id": "entry-no-link",
+            "title": "Linkless Deal",
+            "link": None,
+            "summary": "",
+            "published": "Mon, 01 Jan 2026 00:00:00 +0000",
+            "tags": [],
+        }.get(key, default)
+        entry_with_url = _make_feed_entry("entry-1", "Good Deal", "https://example.com/1")
+        feed = _make_feed([entry_no_url, entry_with_url])
+
+        agent = ScannerAgent(config=config)
+        with patch("dealfinder.agents.scanner.feedparser.parse", return_value=feed):
+            deals = await agent.scan_source(source, session)
+
+        assert len(deals) == 1
+        assert deals[0].title == "Good Deal"
 
     async def test_check_time_failure_does_not_suppress_new_deals(
         self, session, source: DealSource, config: AgentConfig

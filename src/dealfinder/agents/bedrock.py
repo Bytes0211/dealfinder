@@ -149,20 +149,10 @@ class BedrockPriceEstimator:
         if start == -1:
             raise ValueError(f"No JSON object in response: {response_text[:200]}")
 
-        depth, end = 0, -1
-        for i, ch in enumerate(response_text[start:], start):
-            if ch == "{":
-                depth += 1
-            elif ch == "}":
-                depth -= 1
-                if depth == 0:
-                    end = i
-                    break
-
-        if end == -1:
+        try:
+            data, _ = json.JSONDecoder().raw_decode(response_text, start)
+        except json.JSONDecodeError:
             raise ValueError(f"No JSON object in response: {response_text[:200]}")
-
-        data = json.loads(response_text[start : end + 1])
 
         missing = {"estimated_price", "confidence"} - data.keys()
         if missing:

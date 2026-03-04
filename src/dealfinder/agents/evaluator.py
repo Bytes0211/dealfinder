@@ -25,6 +25,7 @@ _TRANSIENT_BEDROCK_CODES: frozenset[str] = frozenset({
     "ThrottlingException",
     "ServiceUnavailableException",
     "ModelTimeoutException",
+    "InternalServerException",
 })
 
 
@@ -176,7 +177,12 @@ class EvaluatorAgent:
                 prediction_range_low=result.range_low,
                 prediction_range_high=result.range_high,
                 inference_time_ms=result.inference_time_ms,
-                features_used={"title": deal.title, "category": deal.category},
+                features_used={
+                    "title": deal.title,
+                    "category": deal.category,
+                    "brand": deal.brand,
+                    "description": deal.description,
+                },
             )
             await estimate_repo.create(estimate)
 

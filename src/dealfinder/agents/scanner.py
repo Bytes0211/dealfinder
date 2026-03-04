@@ -81,12 +81,19 @@ class ScannerAgent:
                 if existing:
                     continue
 
+                link = entry.get("link")
+                if not link:
+                    logger.debug(
+                        f"Skipping entry {external_id} for {source.name}: no URL"
+                    )
+                    continue
+
                 deal = Deal(
                     source_id=source.id,
                     external_id=external_id,
                     title=(entry.get("title") or "Untitled Deal")[:500],
                     description=entry.get("summary") or entry.get("description"),
-                    url=entry.get("link") or "",
+                    url=link,
                     status=DealStatus.DISCOVERED,
                     raw_data={
                         "title": entry.get("title"),

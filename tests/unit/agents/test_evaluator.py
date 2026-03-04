@@ -398,6 +398,33 @@ class TestEvaluatorAgentRun:
 class TestEvaluatorAgentTransientErrors:
     """Tests for transient Bedrock error handling in EvaluatorAgent.evaluate_deal."""
 
+    async def test_internal_server_exception_is_reraised(
+        self, engine, deal_with_price: Deal, config: AgentConfig
+    ) -> None:
+        """InternalServerException should propagate so Step Functions can retry."""
+        error_response = {"Error": {"Code": "InternalServerException", "Message": "Server error"}}
+        failing_estimator = MagicMock()
+        failing_estimator.estimate_price.side_effect = ClientError(error_response, "InvokeModel")
+        agent = EvaluatorAgent(config=config, estimator=failing_estimator)
+
+        factory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        import dealfinder.agents.evaluator as evaluator_module
+        from contextlib import asynccontextmanager
+
+        @asynccontextmanager
+        async def _test_session():
+            async with factory() as s:
+                yield s
+
+        original = evaluator_module.get_async_session
+        evaluator_module.get_async_session = _test_session
+
+        try:
+            with pytest.raises(ClientError):
+                await agent.evaluate_deal(deal_with_price.id)
+        finally:
+            evaluator_module.get_async_session = original
+
     async def test_transient_clienterror_is_reraised(
         self, engine, deal_with_price: Deal, config: AgentConfig
     ) -> None:

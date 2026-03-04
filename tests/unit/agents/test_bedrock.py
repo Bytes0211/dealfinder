@@ -170,11 +170,7 @@ class TestParseResponse:
         self, estimator: BedrockPriceEstimator
     ) -> None:
         """When the response contains a second JSON object after the price JSON,
-        only the first balanced object should be extracted.
-
-        A greedy r'{.*}' match would capture everything up to the last }
-        producing invalid JSON. The balanced-brace walker stops at the first
-        closing brace that brings depth to zero.
+        only the first complete object should be extracted.
         """
         response = (
             '{"estimated_price": 100.0, "confidence": 0.8, '
@@ -184,6 +180,26 @@ class TestParseResponse:
         data = estimator._parse_response(response)
         assert data["estimated_price"] == 100.0
         assert data["confidence"] == 0.8
+
+    def test_parses_json_with_braces_inside_string_values(
+        self, estimator: BedrockPriceEstimator
+    ) -> None:
+        """Braces inside JSON string values must not confuse the parser.
+
+        A brace-counting walker would stop early on a '}' inside a quoted
+        string, leaving json.loads with a truncated, invalid payload.
+        json.JSONDecoder.raw_decode correctly handles escaped strings.
+        """
+        response = json.dumps({
+            "estimated_price": 150.0,
+            "confidence": 0.75,
+            "range_low": 120.0,
+            "range_high": 180.0,
+            "reasoning": "compare to market } rate for similar items",
+        })
+        data = estimator._parse_response(response)
+        assert data["estimated_price"] == 150.0
+        assert "}" in data["reasoning"]
 
 
 class TestPriceEstimationResult:
