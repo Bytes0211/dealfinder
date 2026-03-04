@@ -441,7 +441,7 @@ resource "aws_sfn_state_machine" "pipeline" {
               Next = "IsHighValue"
               Retry = [
                 {
-                  ErrorEquals     = ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException"]
+                  ErrorEquals     = ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException", "ClientError"]
                   IntervalSeconds = 2
                   MaxAttempts     = 2
                   BackoffRate     = 2.0
