@@ -6,7 +6,7 @@ An intelligent multi-agent system that discovers online deals through RSS feeds,
 
 ## Project Status
 
-**Current Phase:** Phase 2 Complete — Data Layer Implemented | Ready for Phase 3
+**Current Phase:** Phase 3 Complete — Core Pipeline Implemented | Ready for Phase 4
 
 **Scope:** 5 phases / 10 weeks | Serverless-first | Target cost: $200-500/month
 
@@ -78,8 +78,14 @@ dealfinder/
 │   └── modules/
 │       ├── networking/            # VPC, subnets, VPC endpoints
 │       ├── data/                  # S3, DynamoDB, Aurora, OpenSearch
-│       └── monitoring/            # CloudWatch logs, alarms, dashboard
+│       ├── monitoring/            # CloudWatch logs, alarms, dashboard
+│       └── pipeline/              # SQS, Lambda, Step Functions, EventBridge
 ├── src/dealfinder/                # Python package
+│   ├── agents/
+│   │   ├── config.py              # AgentConfig (pydantic-settings)
+│   │   ├── bedrock.py             # BedrockPriceEstimator + PriceEstimationResult
+│   │   ├── scanner.py             # ScannerAgent Lambda + handler()
+│   │   └── evaluator.py           # EvaluatorAgent Lambda + handler()
 │   ├── db/
 │   │   ├── models.py              # SQLAlchemy ORM models (5 models, 3 enums)
 │   │   ├── connection.py          # Async engine and session management
@@ -91,7 +97,11 @@ dealfinder/
 │       ├── embeddings.py          # Embedding service (abstract provider pattern)
 │       └── index.py               # Index management and mappings
 ├── tests/
-│   ├── unit/                      # Unit tests (models, repositories, search)
+│   ├── unit/
+│   │   ├── agents/                # Agent unit tests (37 tests)
+│   │   ├── db/                    # ORM model tests
+│   │   ├── data/                  # Repository tests
+│   │   └── search/                # OpenSearch/embedding tests
 │   └── infrastructure/            # AWS resource validation tests
 └── pyproject.toml                 # Dependencies, tool config, build settings
 ```
@@ -132,16 +142,16 @@ terraform apply
 
 ```bash
 # Run all tests
-pytest tests/ -v
+uv run pytest tests/ -v
 
 # Run unit tests only
-pytest tests/unit/ -v
+uv run pytest tests/unit/ -v
 
 # Run infrastructure validation tests
-pytest tests/infrastructure/ -v
+uv run pytest tests/infrastructure/ -v
 
 # Run with coverage
-pytest tests/ --cov=src --cov-report=html
+uv run pytest tests/ --cov=src --cov-report=html
 ```
 
 ## Performance Targets
@@ -173,14 +183,14 @@ Feature flags keep idle dev costs at ~$4-10/month:
 - OpenSearch client with vector search
 - Embedding service with provider abstraction
 
-### Phase 3: Core Pipeline (Weeks 5-7) — NEXT
-- Scanner Agent Lambda (RSS parsing)
-- Bedrock integration (price estimation)
-- Evaluator Agent Lambda
-- Step Functions state machine
-- SQS queues + EventBridge schedule
+### Phase 3: Core Pipeline (Weeks 5-7) — COMPLETE
+- ScannerAgent Lambda (RSS parsing, SHA-256 dedup, async feedparser)
+- BedrockPriceEstimator (Claude via boto3, async via run_in_executor)
+- EvaluatorAgent Lambda (discount calc, high-value flagging)
+- Step Functions state machine (Scan → Map(Evaluate → IsHighValue?) → Notify)
+- SQS queues + DLQ alarms + EventBridge schedule (disabled by default)
 
-### Phase 4: Notifications + API (Weeks 8-9)
+### Phase 4: Notifications + API (Weeks 8-9) — NEXT
 - Messenger Agent Lambda (Bedrock + Pushover)
 - SES email + SNS fan-out
 - FastAPI REST API + API Gateway + Cognito auth

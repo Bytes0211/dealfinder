@@ -29,32 +29,8 @@ variable "enable_nat_gateway" {
   default     = false # Disabled by default for dev
 }
 
-variable "enable_msk" {
-  description = "Enable MSK Kafka cluster (disable to save ~$400-600/month)"
-  type        = bool
-  default     = false
-}
-
 variable "enable_opensearch" {
   description = "Enable OpenSearch cluster (disable to save ~$300-500/month)"
-  type        = bool
-  default     = false
-}
-
-variable "enable_emr" {
-  description = "Enable EMR cluster (disable to save ~$100-200/month)"
-  type        = bool
-  default     = false
-}
-
-variable "enable_ecs" {
-  description = "Enable ECS Fargate (disable to save ~$200-300/month)"
-  type        = bool
-  default     = false
-}
-
-variable "enable_sagemaker" {
-  description = "Enable SageMaker endpoints (disable to save costs)"
   type        = bool
   default     = false
 }
@@ -165,4 +141,23 @@ variable "opensearch_create_service_linked_role" {
   description = "Create OpenSearch service-linked role (set false if already exists)"
   type        = bool
   default     = true
+}
+
+# Pipeline (Phase 3)
+variable "db_secret_arn" {
+  description = "ARN of Secrets Manager secret with Aurora DB credentials (empty when Aurora disabled)"
+  type        = string
+  default     = ""
+}
+
+variable "enable_pipeline_schedule" {
+  description = "Enable EventBridge schedule to run the pipeline automatically"
+  type        = bool
+  default     = false # Disabled by default to prevent unintended executions in dev
+}
+
+variable "pipeline_schedule_expression" {
+  description = "EventBridge schedule expression for the pipeline (cron or rate)"
+  type        = string
+  default     = "rate(15 minutes)"
 }

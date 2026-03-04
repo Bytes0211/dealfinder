@@ -6,7 +6,7 @@ This file provides guidance to AI assistants (Claude Code, Warp, etc.) when work
 
 Deal Finder is an AI-powered deal hunting system that discovers deals via RSS feeds, estimates prices using AWS Bedrock (Claude), and sends notifications for high-value opportunities. It's a serverless system on AWS, built by a solo developer.
 
-**Status:** Phase 2 of 5 complete. Infrastructure and data layer are built. Next: core pipeline (Phase 3).
+**Status:** Phase 3 of 5 complete. Infrastructure, data layer, and core pipeline are built. Next: notifications + API (Phase 4).
 
 ## Architecture
 
@@ -42,25 +42,39 @@ EventBridge (schedule) → Scanner → Evaluate → Decide (discount > threshold
 
 ```
 src/dealfinder/
+├── agents/
+│   ├── config.py           # AgentConfig (pydantic-settings, env_prefix=DEALFINDER_)
+│   ├── bedrock.py          # BedrockPriceEstimator, PriceEstimationResult
+│   ├── scanner.py          # ScannerAgent + Lambda handler
+│   └── evaluator.py        # EvaluatorAgent + Lambda handler
 ├── db/
-│   ├── models.py          # SQLAlchemy ORM models (5 models, 3 enums)
+│   ├── models.py           # SQLAlchemy ORM models (5 models, 3 enums)
 │   ├── connection.py       # Async engine, session factory, context manager
 │   └── alembic/            # Database migrations
 ├── data/
 │   └── repository.py       # Repository pattern (5 repository classes + BaseRepository)
-├── search/
-│   ├── client.py           # OpenSearch client (k-NN, bulk, CRUD)
-│   ├── embeddings.py       # Embedding service (abstract provider pattern)
-│   └── index.py            # Index management and mappings
+└── search/
+    ├── client.py           # OpenSearch client (k-NN, bulk, CRUD)
+    ├── embeddings.py       # Embedding service (abstract provider pattern)
+    └── index.py            # Index management and mappings
 tests/
-├── unit/                   # Unit tests organized by module
+├── unit/
+│   ├── agents/             # Agent tests (conftest.py has shared SQLite overrides)
+│   │   ├── conftest.py     # @compiles JSONB/UUID overrides for SQLite
+│   │   ├── test_bedrock.py
+│   │   ├── test_scanner.py
+│   │   └── test_evaluator.py
 │   ├── db/test_models.py
 │   ├── data/test_repository.py
 │   └── search/test_*.py
-├── infrastructure/         # Terraform resource validation tests
+└── infrastructure/         # Terraform resource validation tests
 infrastructure/
 ├── environments/dev/       # Terraform dev environment
-└── modules/                # Terraform modules (networking, data, monitoring)
+└── modules/
+    ├── networking/         # VPC, subnets, VPC endpoints
+    ├── data/               # S3, DynamoDB, Aurora, OpenSearch
+    ├── monitoring/         # CloudWatch logs, alarms, dashboard
+    └── pipeline/           # SQS, Lambda, Step Functions, EventBridge, IAM
 ```
 
 ## Code Conventions
@@ -118,7 +132,9 @@ infrastructure/
 └── modules/
     ├── networking/           # VPC, subnets, VPC endpoints
     ├── data/                 # S3, DynamoDB, Aurora, OpenSearch
-    └── monitoring/           # CloudWatch logs, alarms, dashboard
+    ├── monitoring/           # CloudWatch logs, alarms, dashboard
+    └── pipeline/             # SQS queues+DLQs, Lambda, Step Functions,
+                              # EventBridge schedule, IAM roles
 ```
 
 ### Key Principles
@@ -143,7 +159,7 @@ Feature flags keep idle costs at ~$4-10/month:
 - **Mocking:** Prefer real implementations (MockEmbeddingProvider, in-memory DB) over unittest.mock patching.
 - **Structure:** Tests grouped into classes (`TestDealRepository`, `TestUserRepository`). Each test has a docstring.
 - **Assertions:** Plain `assert` statements. Use `pytest.raises()` for exceptions.
-- **Run:** `pytest tests/ -v`
+- **Run:** `uv run pytest tests/ -v`
 
 ## Git Conventions
 
@@ -170,7 +186,7 @@ Feature flags keep idle costs at ~$4-10/month:
 
 3. **Tests**
    - Create unit tests for all new code
-   - Run `pytest tests/ -v` and verify all pass before marking complete
+   - Run `uv run pytest tests/ -v` and verify all pass before marking complete
 
 ## Key Design Decisions
 
@@ -192,6 +208,10 @@ Feature flags keep idle costs at ~$4-10/month:
 |------|---------|
 | `PRODUCTION_PLAN.md` | Revised architecture and phase plan |
 | `developer/project-status.md` | Progress tracking and timeline |
+| `src/dealfinder/agents/scanner.py` | ScannerAgent Lambda (RSS → Aurora) |
+| `src/dealfinder/agents/evaluator.py` | EvaluatorAgent Lambda (Bedrock → discount) |
+| `src/dealfinder/agents/bedrock.py` | BedrockPriceEstimator + PriceEstimationResult |
+| `src/dealfinder/agents/config.py` | AgentConfig pydantic-settings |
 | `src/dealfinder/db/models.py` | All 5 ORM models |
 | `src/dealfinder/data/repository.py` | All 5 repository classes + BaseRepository |
 | `src/dealfinder/db/connection.py` | Async DB engine and session management |
@@ -199,15 +219,18 @@ Feature flags keep idle costs at ~$4-10/month:
 | `src/dealfinder/search/embeddings.py` | Embedding provider abstraction |
 | `pyproject.toml` | Dependencies, tool config, build settings |
 | `infrastructure/environments/dev/` | Terraform dev environment |
+| `infrastructure/modules/pipeline/` | Pipeline Terraform module |
 
 ## What NOT to Do
 
 - Don't add Kafka, Spark, ECS, SageMaker, or React — these were intentionally removed from scope.
 - Don't use synchronous database calls — everything is async.
+- Don't call blocking I/O (boto3, feedparser, requests) directly inside `async def` — wrap in `asyncio.get_running_loop().run_in_executor(None, ...)` to keep the event loop responsive.
 - Don't bypass the repository layer with raw SQL or direct session queries in business logic.
 - Don't hardcode credentials — use Secrets Manager or env vars via pydantic-settings.
 - Don't create heavyweight abstractions for things that only happen once.
 - Don't add monitoring infrastructure (Prometheus, Grafana) — CloudWatch is sufficient.
+- Don't use Step Functions `Pass` states for error paths — use `Fail` states with `Error`/`Cause` so failed executions show up in `ExecutionsFailed` metrics and alerting.
 
 ## Reference Documentation
 

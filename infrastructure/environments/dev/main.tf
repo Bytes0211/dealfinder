@@ -153,15 +153,26 @@ module "opensearch" {
   tags = local.common_tags
 }
 
-# TODO: Add additional modules as they are implemented
-# module "msk" {
-#   source = "../../modules/data/msk"
-#   count  = var.enable_msk ? 1 : 0
-#   ...
-# }
+# Pipeline Module (Phase 3)
+module "pipeline" {
+  source = "../../modules/pipeline"
 
-# module "ecs" {
-#   source = "../../modules/compute/ecs"
-#   count  = var.enable_ecs ? 1 : 0
-#   ...
-# }
+  project_name       = var.project_name
+  environment        = var.environment
+  aws_region         = var.aws_region
+  vpc_id             = module.networking.vpc_id
+  vpc_cidr           = module.networking.vpc_cidr
+  private_subnet_ids = module.networking.private_subnet_ids
+
+  log_retention_days  = var.log_retention_days
+  alarm_sns_topic_arn = module.cloudwatch.alarms_topic_arn
+
+  enable_schedule     = var.enable_pipeline_schedule
+  schedule_expression = var.pipeline_schedule_expression
+
+  db_secret_arn = var.db_secret_arn
+  db_host       = try(module.aurora[0].cluster_endpoint, "")
+  db_name       = var.aurora_database_name
+
+  tags = local.common_tags
+}
