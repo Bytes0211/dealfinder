@@ -5,7 +5,7 @@ deal persistence logic without network or real database dependencies.
 """
 
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from sqlalchemy import event
@@ -236,3 +236,50 @@ class TestScannerAgentScanSource:
             deals = await agent.scan_source(source, session)
 
         assert deals == []
+
+    async def test_db_error_during_create_still_updates_source_health(
+        self, session, source: DealSource, config: AgentConfig
+    ) -> None:
+        """A race-condition DB constraint error during create() is isolated by a
+        savepoint so it does not poison the session or prevent health counters
+        from being updated.
+
+        Before the fix, an IntegrityError from deal_repo.create() deactivated
+        the asyncpg transaction, causing update_check_time to raise
+        PendingRollbackError.  The savepoint wrapping each insert rolls back only
+        that entry, leaving the session healthy.  The duplicate is silently
+        skipped and the source health counters reflect a successful scan
+        (success=True because the feed itself was processed).
+        """
+        from dealfinder.db.models import Deal as DealModel
+
+        # Pre-insert a deal that will cause a UNIQUE constraint violation
+        duplicate = DealModel(
+            source_id=source.id,
+            external_id="entry-dup",
+            title="Pre-existing Deal",
+            url="https://example.com/dup",
+            status=DealStatus.DISCOVERED,
+        )
+        session.add(duplicate)
+        await session.commit()
+
+        # Feed returns an entry with the same external_id
+        entries = [_make_feed_entry("entry-dup", "New Deal", "https://example.com/dup")]
+        feed = _make_feed(entries)
+
+        agent = ScannerAgent(config=config)
+        with patch("dealfinder.agents.scanner.feedparser.parse", return_value=feed):
+            # Bypass the duplicate check so create() is actually attempted and
+            # hits the real UNIQUE constraint.  The savepoint rolls back only
+            # this entry; the session remains healthy for update_check_time.
+            with patch.object(
+                DealRepository, "get_by_external_id", new_callable=AsyncMock, return_value=None
+            ):
+                deals = await agent.scan_source(source, session)
+
+        # Duplicate was skipped; scan completed with success=True
+        assert deals == []
+        await session.refresh(source)
+        assert source.last_successful_at is not None  # update_check_time ran OK
+        assert source.error_count == 0  # success=True path, not error path

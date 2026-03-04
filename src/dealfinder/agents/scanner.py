@@ -96,8 +96,17 @@ class ScannerAgent:
                         "tags": [t.get("term") for t in entry.get("tags", [])],
                     },
                 )
-                created = await deal_repo.create(deal)
-                new_deals.append(created)
+                # Use a savepoint so a race-condition unique-constraint
+                # violation on this entry only rolls back the single
+                # insert — not the entire source transaction.
+                try:
+                    async with session.begin_nested():
+                        created = await deal_repo.create(deal)
+                    new_deals.append(created)
+                except Exception as entry_exc:
+                    logger.warning(
+                        f"Skipping entry {external_id} for {source.name}: {entry_exc}"
+                    )
 
             await source_repo.update_check_time(source.id, success=True)
             logger.info(f"Discovered {len(new_deals)} new deals from {source.name}")

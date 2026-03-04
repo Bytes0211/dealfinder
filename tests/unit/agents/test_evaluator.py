@@ -120,6 +120,28 @@ async def deal_no_price(db_session, source: DealSource) -> Deal:
 
 
 @pytest.fixture
+async def deal_with_zero_sale_price(db_session, source: DealSource) -> Deal:
+    """Persisted Deal with sale_price explicitly set to $0.00 (a free item).
+
+    original_price is set to a non-zero value so a falsy-check regression
+    would silently use that instead of the correct $0.00 sale price.
+    """
+    deal = Deal(
+        source_id=source.id,
+        external_id="deal-free",
+        title="Free Widget",
+        url="https://example.com/free",
+        sale_price=Decimal("0.00"),
+        original_price=Decimal("50.00"),
+        status=DealStatus.DISCOVERED,
+    )
+    db_session.add(deal)
+    await db_session.commit()
+    await db_session.refresh(deal)
+    return deal
+
+
+@pytest.fixture
 def config() -> AgentConfig:
     """Agent config with 20% discount threshold."""
     return AgentConfig(
@@ -259,6 +281,39 @@ class TestEvaluatorAgentEvaluateDeal:
 
         assert result["status"] == "not_found"
         assert result["is_high_value"] is False
+
+    async def test_zero_sale_price_is_evaluated_not_rejected(
+        self, engine, deal_with_zero_sale_price: Deal, config: AgentConfig
+    ) -> None:
+        """Deal with sale_price=Decimal('0.00') must be evaluated, not rejected.
+
+        Decimal('0.00') is falsy in Python, so a naive `or`-based check would
+        fall through to original_price ($50.00).  The explicit `is not None`
+        check must use $0.00, yielding a 100% discount when estimated at $10.
+        """
+        estimator = _make_estimator(estimated_price=10.0, confidence=0.9)
+        agent = EvaluatorAgent(config=config, estimator=estimator)
+
+        factory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        import dealfinder.agents.evaluator as evaluator_module
+        from contextlib import asynccontextmanager
+
+        @asynccontextmanager
+        async def _test_session():
+            async with factory() as s:
+                yield s
+
+        original = evaluator_module.get_async_session
+        evaluator_module.get_async_session = _test_session
+
+        try:
+            result = await agent.evaluate_deal(deal_with_zero_sale_price.id)
+        finally:
+            evaluator_module.get_async_session = original
+
+        assert result["status"] == "evaluated"
+        assert result["discount_percentage"] == 100.0  # (10 - 0) / 10 * 100
+        assert result["is_high_value"] is True
 
     async def test_deal_with_no_price_is_rejected(
         self, engine, deal_no_price: Deal, config: AgentConfig

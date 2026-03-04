@@ -104,8 +104,8 @@ class EvaluatorAgent:
 
             await deal_repo.update_status(deal_id, DealStatus.EVALUATING)
 
-            sale_price = deal.sale_price or deal.original_price
-            if not sale_price:
+            sale_price = deal.sale_price if deal.sale_price is not None else deal.original_price
+            if sale_price is None:
                 logger.warning(f"Deal {deal_id} has no price data — rejecting")
                 await deal_repo.update_status(deal_id, DealStatus.REJECTED)
                 return {
