@@ -246,6 +246,10 @@ resource "aws_lambda_function" "scanner" {
   timeout       = var.lambda_timeout_seconds
   memory_size   = var.lambda_memory_mb
 
+  # NOTE: The Scanner Lambda makes outbound HTTPS calls to public RSS feed URLs
+  # via feedparser.parse(). enable_nat_gateway must be true (or private_subnet_ids
+  # must have internet access via another route) for feed fetches to succeed.
+  # Without outbound internet access, every feedparser.parse() call will time out.
   vpc_config {
     subnet_ids         = var.private_subnet_ids
     security_group_ids = [aws_security_group.lambda.id]

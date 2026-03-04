@@ -166,6 +166,25 @@ class TestParseResponse:
         assert data.get("range_low") is None
         assert data.get("range_high") is None
 
+    def test_parses_first_json_when_response_has_trailing_json(
+        self, estimator: BedrockPriceEstimator
+    ) -> None:
+        """When the response contains a second JSON object after the price JSON,
+        only the first balanced object should be extracted.
+
+        A greedy r'{.*}' match would capture everything up to the last }
+        producing invalid JSON. The balanced-brace walker stops at the first
+        closing brace that brings depth to zero.
+        """
+        response = (
+            '{"estimated_price": 100.0, "confidence": 0.8, '
+            '"range_low": 80.0, "range_high": 120.0, "reasoning": "ok"}'
+            ' See {"source": "Amazon"} for reference.'
+        )
+        data = estimator._parse_response(response)
+        assert data["estimated_price"] == 100.0
+        assert data["confidence"] == 0.8
+
 
 class TestPriceEstimationResult:
     """Tests for PriceEstimationResult dataclass."""

@@ -237,6 +237,31 @@ class TestScannerAgentScanSource:
 
         assert deals == []
 
+    async def test_check_time_failure_does_not_suppress_new_deals(
+        self, session, source: DealSource, config: AgentConfig
+    ) -> None:
+        """A failure in update_check_time(success=True) must not suppress deal IDs.
+
+        Before the fix, an exception from update_check_time(success=True) escaped
+        to the outer except, which returned [] even though the deals had already
+        been queued in the session via savepoints.
+        """
+        entries = [_make_feed_entry("entry-1", "Good Deal", "https://example.com/1")]
+        feed = _make_feed(entries)
+
+        agent = ScannerAgent(config=config)
+        with patch("dealfinder.agents.scanner.feedparser.parse", return_value=feed):
+            with patch.object(
+                DealSourceRepository,
+                "update_check_time",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("health counter failure"),
+            ):
+                deals = await agent.scan_source(source, session)
+
+        assert len(deals) == 1
+        assert deals[0].title == "Good Deal"
+
     async def test_db_error_during_create_still_updates_source_health(
         self, session, source: DealSource, config: AgentConfig
     ) -> None:

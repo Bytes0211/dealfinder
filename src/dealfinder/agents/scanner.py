@@ -108,7 +108,11 @@ class ScannerAgent:
                         f"Skipping entry {external_id} for {source.name}: {entry_exc}"
                     )
 
-            await source_repo.update_check_time(source.id, success=True)
+            try:
+                await source_repo.update_check_time(source.id, success=True)
+            except Exception as hc_exc:
+                logger.warning(f"Failed to update check time for {source.name}: {hc_exc}")
+
             logger.info(f"Discovered {len(new_deals)} new deals from {source.name}")
             return new_deals
 

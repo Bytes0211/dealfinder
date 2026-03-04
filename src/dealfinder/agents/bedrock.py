@@ -6,7 +6,6 @@ structured prompts and parsing structured JSON responses from Claude.
 
 import json
 import logging
-import re
 import time
 from dataclasses import dataclass
 from decimal import Decimal
@@ -146,11 +145,24 @@ class BedrockPriceEstimator:
             ValueError: If no JSON object is found or required fields are missing.
             ValueError: If confidence is outside the 0.0–1.0 range.
         """
-        match = re.search(r"\{.*\}", response_text.strip(), re.DOTALL)
-        if not match:
+        start = response_text.find("{")
+        if start == -1:
             raise ValueError(f"No JSON object in response: {response_text[:200]}")
 
-        data = json.loads(match.group())
+        depth, end = 0, -1
+        for i, ch in enumerate(response_text[start:], start):
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    end = i
+                    break
+
+        if end == -1:
+            raise ValueError(f"No JSON object in response: {response_text[:200]}")
+
+        data = json.loads(response_text[start : end + 1])
 
         missing = {"estimated_price", "confidence"} - data.keys()
         if missing:
