@@ -454,8 +454,9 @@ resource "aws_sfn_state_machine" "pipeline" {
               End  = true
             }
             DealFailed = {
-              Type = "Pass"
-              End  = true
+              Type  = "Fail"
+              Error = "DealEvaluationError"
+              Cause = "EvaluatorAgent failed; see CloudWatch logs for details"
             }
           }
         }
@@ -468,8 +469,9 @@ resource "aws_sfn_state_machine" "pipeline" {
       }
 
       PipelineFailed = {
-        Type = "Pass"
-        End  = true
+        Type  = "Fail"
+        Error = "PipelineScanError"
+        Cause = "ScannerAgent failed; see CloudWatch logs for details"
       }
     }
   })

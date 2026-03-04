@@ -117,12 +117,16 @@ class EvaluatorAgent:
                 }
 
             try:
-                result: PriceEstimationResult = self.estimator.estimate_price(
-                    title=deal.title,
-                    sale_price=sale_price,
-                    description=deal.description,
-                    category=deal.category,
-                    brand=deal.brand,
+                loop = asyncio.get_running_loop()
+                result: PriceEstimationResult = await loop.run_in_executor(
+                    None,
+                    lambda: self.estimator.estimate_price(
+                        title=deal.title,
+                        sale_price=sale_price,
+                        description=deal.description,
+                        category=deal.category,
+                        brand=deal.brand,
+                    ),
                 )
             except Exception as e:
                 logger.error(f"Bedrock estimation failed for deal {deal_id}: {e}")

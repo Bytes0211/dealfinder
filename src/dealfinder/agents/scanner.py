@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 import feedparser
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from dealfinder.agents.config import AgentConfig
 from dealfinder.data.repository import DealRepository, DealSourceRepository
@@ -44,7 +45,7 @@ class ScannerAgent:
         """
         self.config = config or AgentConfig()
 
-    async def scan_source(self, source: DealSource, session: Any) -> list[Deal]:
+    async def scan_source(self, source: DealSource, session: AsyncSession) -> list[Deal]:
         """Fetch the RSS feed for one source and store any new deals.
 
         Args:
@@ -64,9 +65,7 @@ class ScannerAgent:
             feed = await loop.run_in_executor(None, feedparser.parse, source.url)
 
             if feed.bozo and not feed.entries:
-                logger.warning(
-                    f"Failed to parse feed for {source.name}: {feed.bozo_exception}"
-                )
+                logger.warning(f"Failed to parse feed for {source.name}: {feed.bozo_exception}")
                 await source_repo.update_check_time(source.id, success=False)
                 return []
 
@@ -75,9 +74,7 @@ class ScannerAgent:
                 external_id = (
                     entry.get("id")
                     or entry.get("link")
-                    or hashlib.sha256(
-                        f"{source.id}:{entry.get('title', '')}".encode()
-                    ).hexdigest()
+                    or hashlib.sha256(f"{source.id}:{entry.get('title', '')}".encode()).hexdigest()
                 )
 
                 existing = await deal_repo.get_by_external_id(source.id, external_id)
