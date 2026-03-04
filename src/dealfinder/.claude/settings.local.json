@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(ln:*)",
+      "Bash(gh pr edit:*)",
+      "Bash(gh pr merge:*)"
+    ]
+  }
+}

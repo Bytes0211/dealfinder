@@ -1,0 +1,17 @@
+# Example Terraform Variables for Dev Environment
+# Copy this file to terraform.tfvars and customize as needed
+
+project_name = "dealfinder"
+environment  = "dev"
+aws_region   = "us-east-1"
+vpc_cidr     = "10.0.0.0/16"
+
+# Cost-saving feature flags
+# Set to true only when actively developing that component
+
+enable_nat_gateway = false # Disable to save ~$100/month
+enable_msk         = false # Disable to save ~$400-600/month
+enable_opensearch  = false # Disable to save ~$300-500/month
+enable_emr         = false # Disable to save ~$100-200/month
+enable_ecs         = false # Disable to save ~$200-300/month
+enable_sagemaker   = false # Disable to save costs
