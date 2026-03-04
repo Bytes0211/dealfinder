@@ -1,7 +1,7 @@
 # Deal Finder - Project Status & Timeline
 
 **Project Start:** January 21, 2026
-**Last Update:** February 18, 2026
+**Last Update:** March 4, 2026
 **Project Duration:** 10 weeks (revised from 18 weeks)
 **Current Status:** Phase 2 Complete | 40% Complete | Ready for Phase 3
 
@@ -75,7 +75,7 @@ Legend:
 | Provision AWS accounts and organization | scotton | 0.5 | ✅ DONE | AWS account configured |
 | Set up VPC and networking | scotton | 1.0 | ✅ DONE | 3 AZ, VPC endpoints |
 | Deploy development environment | scotton | 1.5 | ✅ DONE | Terraform modules complete |
-| Configure CI/CD pipeline | scotton | 1.0 | ✅ DONE | GitHub Actions + Dependabot |
+| Configure CI/CD pipeline | scotton | 1.0 | ⏸️ NOT STARTED | `.github/` not created yet |
 | Establish monitoring baseline | scotton | 1.0 | ✅ DONE | CloudWatch dashboards + alarms |
 
 **Deliverables:**
@@ -85,9 +85,9 @@ Legend:
 - ✅ VPC endpoints (DynamoDB, S3)
 - ✅ 3 S3 buckets (data-lake, models, backups) with lifecycle policies
 - ✅ 3 DynamoDB tables (deal-state, agent-state, user-sessions)
-- ✅ GitHub Actions CI/CD (linting, testing, deployment)
+- ⏸️ GitHub Actions CI/CD (not yet created — `.github/workflows/` does not exist)
 - ✅ CloudWatch monitoring (12 resources: logs, alarms, dashboard, cost anomaly)
-- ✅ Comprehensive unit test suite (97 tests, 1,197 lines)
+- ✅ Unit test suite (187 passing, 41 skipped after March 4 cleanup)
 - ✅ Infrastructure documentation
 
 **Cost:** ~$4-10/month
@@ -118,7 +118,7 @@ Legend:
 - ✅ Initial database schema migration
 - ✅ OpenSearch client with vector search
 - ✅ Embedding service with mock provider
-- ✅ Repository pattern data access layer (6 repositories)
+- ✅ Repository pattern data access layer (5 repository classes + BaseRepository)
 - ✅ Unit tests for all new modules
 
 ---
@@ -215,8 +215,8 @@ Legend:
 ## Overall Project Status
 
 ### Completion Metrics
-- **Overall Progress:** 40% (10 of 25 tasks complete)
-- **Phase 1:** 100% complete ✅
+- **Overall Progress:** 36% (9 of 25 tasks complete)
+- **Phase 1:** 80% complete (CI/CD not yet set up)
 - **Phase 2:** 100% complete ✅
 - **Phase 3:** 0% complete
 - **Phase 4:** 0% complete
@@ -302,8 +302,9 @@ Legend:
 ## Next Actions (Priority Order)
 
 ### Immediate
-1. ⏸️ Commit scope revision to GitHub
-2. ⏸️ Tag release v0.2.0-phase2
+1. ⏸️ Set up GitHub Actions CI/CD (`.github/workflows/ci.yml`, `cd.yml`)
+2. ⏸️ Commit cleanup + scope revision to GitHub
+3. ⏸️ Tag release v0.2.0-phase2
 
 ### Phase 3 (Next)
 1. Implement Scanner Agent Lambda (RSS feed parsing with feedparser)
@@ -320,7 +321,7 @@ Legend:
 ### Technical KPIs
 - ✅ Infrastructure deployed: 47 resources
 - ✅ Terraform state managed remotely
-- ✅ CI/CD pipeline operational
+- ⏸️ CI/CD pipeline (`.github/workflows/` not yet created)
 - ✅ Monitoring baseline established
 - ✅ Database models and repository layer complete
 - ⏸️ Pipeline reliability: >95% (pending Phase 3)
@@ -338,6 +339,7 @@ Legend:
 
 | Date | Change | Rationale |
 |------|--------|-----------|
+| Mar 4, 2026 | Project audit and cleanup | Corrected docs vs reality gaps (see v3.1) |
 | Feb 18, 2026 | Reduced from 8 phases to 5 phases | Solo developer, realistic timeline |
 | Feb 18, 2026 | Removed Kafka (MSK) | SQS/SNS sufficient at current scale |
 | Feb 18, 2026 | Removed Spark (EMR) | Lambda sufficient for batch processing |
@@ -362,6 +364,7 @@ Legend:
 | 2.0 | Feb 17, 2026 23:35 | scotton/Warp | Phase 2 complete - Data layer implemented |
 | 2.1 | Feb 18, 2026 03:12 | scotton/Warp | Documentation update - All docs synchronized |
 | 3.0 | Feb 18, 2026 | scotton | **Scope revision** - 5 phases, serverless-first, $200-500/mo target |
+| 3.1 | Mar 4, 2026 | scotton/Warp | **Project audit** - Fixed docs vs reality: rewrote README, fixed broken tests (187 pass/41 skip/0 fail), removed stale CI/CD tests, cleaned pyproject.toml (removed redis, separated dev deps, added aiosqlite), deleted empty emr/msk dirs, corrected CI/CD status to not-started, updated AGENTS.md repo class count |
 
 ---
 
@@ -375,5 +378,5 @@ Legend:
 
 ---
 
-**Last Updated:** February 18, 2026
-**Status:** ✅ Phase 2 Complete — Scope Revised — Ready for Phase 3
+**Last Updated:** March 4, 2026
+**Status:** Phase 2 Complete — Audit Complete — Ready for Phase 3 (CI/CD still needed)
