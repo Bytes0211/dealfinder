@@ -406,7 +406,7 @@ resource "aws_sfn_state_machine" "pipeline" {
 
   logging_configuration {
     log_destination        = "${aws_cloudwatch_log_group.sfn_pipeline.arn}:*"
-    include_execution_data = false
+    include_execution_data = true
     level                  = "ERROR"
   }
 

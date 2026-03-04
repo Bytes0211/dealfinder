@@ -183,7 +183,7 @@ class EvaluatorAgent:
                     "title": deal.title,
                     "category": deal.category,
                     "brand": deal.brand,
-                    "description": deal.description,
+                    "description": deal.description[:500] if deal.description else None,
                 },
             )
             await estimate_repo.create(estimate)
