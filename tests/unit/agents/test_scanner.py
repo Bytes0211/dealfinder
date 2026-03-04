@@ -199,6 +199,31 @@ class TestScannerAgentScanSource:
         assert source.last_successful_at is not None
         assert source.error_count == 0
 
+    async def test_deterministic_hash_deduplicates_entries_without_id(
+        self, session, source: DealSource, config: AgentConfig
+    ) -> None:
+        """Entries with no id or link should be deduplicated via title hash, not re-inserted."""
+        # Build an entry where both id and link are falsy
+        entry = MagicMock()
+        entry.get = lambda key, default=None: {
+            "id": None,
+            "title": "No-ID Widget",
+            "link": None,
+            "summary": "",
+            "published": "Mon, 01 Jan 2026 00:00:00 +0000",
+            "tags": [],
+        }.get(key, default)
+        feed = _make_feed([entry])
+
+        agent = ScannerAgent(config=config)
+        with patch("dealfinder.agents.scanner.feedparser.parse", return_value=feed):
+            first = await agent.scan_source(source, session)
+            await session.commit()
+            second = await agent.scan_source(source, session)
+
+        assert len(first) == 1, "First scan should create one deal"
+        assert len(second) == 0, "Second scan should skip — same hash, not re-inserted"
+
     async def test_returns_empty_on_exception(
         self, session, source: DealSource, config: AgentConfig
     ) -> None:

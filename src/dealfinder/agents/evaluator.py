@@ -19,9 +19,6 @@ from dealfinder.db.models import DealStatus, PriceEstimate
 
 logger = logging.getLogger(__name__)
 
-_MODEL_NAME = "claude-bedrock-specialist"
-
-
 class EvaluatorAgent:
     """Evaluates deals by estimating fair market price and calculating discounts.
 
@@ -141,7 +138,7 @@ class EvaluatorAgent:
 
             estimate = PriceEstimate(
                 deal_id=deal_id,
-                model_name=_MODEL_NAME,
+                model_name=result.model_id,
                 model_version=BedrockPriceEstimator.MODEL_VERSION,
                 estimated_price=result.estimated_price,
                 confidence=result.confidence,

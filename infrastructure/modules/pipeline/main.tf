@@ -4,6 +4,9 @@ locals {
 
 # ─────────────────────────────────────────────
 # SQS — Deal Processing Queue
+# Reserved for Phase 4: the Messenger Agent will consume from this queue
+# as a decoupled subscriber to scanner output, allowing fan-out without
+# coupling the pipeline state machine directly to notification logic.
 # ─────────────────────────────────────────────
 
 resource "aws_sqs_queue" "deal_processing_dlq" {

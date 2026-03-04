@@ -7,10 +7,10 @@ duplicates.
 """
 
 import asyncio
+import hashlib
 import logging
 from datetime import datetime, timezone
 from typing import Any
-from uuid import uuid4
 
 import feedparser
 
@@ -60,7 +60,8 @@ class ScannerAgent:
         logger.info(f"Scanning source: {source.name} ({source.url})")
 
         try:
-            feed = feedparser.parse(source.url)
+            loop = asyncio.get_running_loop()
+            feed = await loop.run_in_executor(None, feedparser.parse, source.url)
 
             if feed.bozo and not feed.entries:
                 logger.warning(
@@ -72,7 +73,11 @@ class ScannerAgent:
             new_deals: list[Deal] = []
             for entry in feed.entries:
                 external_id = (
-                    entry.get("id") or entry.get("link") or str(uuid4())
+                    entry.get("id")
+                    or entry.get("link")
+                    or hashlib.sha256(
+                        f"{source.id}:{entry.get('title', '')}".encode()
+                    ).hexdigest()
                 )
 
                 existing = await deal_repo.get_by_external_id(source.id, external_id)
