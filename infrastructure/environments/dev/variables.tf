@@ -166,3 +166,16 @@ variable "opensearch_create_service_linked_role" {
   type        = bool
   default     = true
 }
+
+# Pipeline (Phase 3)
+variable "enable_pipeline_schedule" {
+  description = "Enable EventBridge schedule to run the pipeline automatically"
+  type        = bool
+  default     = false # Disabled by default to prevent unintended executions in dev
+}
+
+variable "pipeline_schedule_expression" {
+  description = "EventBridge schedule expression for the pipeline (cron or rate)"
+  type        = string
+  default     = "rate(15 minutes)"
+}
