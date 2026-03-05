@@ -150,6 +150,25 @@ variable "db_secret_arn" {
   default     = ""
 }
 
+# Phase 4 — Notifications
+variable "ses_sender_email" {
+  description = "Verified SES sender email address for deal alert emails"
+  type        = string
+  default     = ""
+}
+
+variable "pushover_secret_arn" {
+  description = "ARN of the Secrets Manager secret for Pushover API token"
+  type        = string
+  default     = ""
+}
+
+variable "messenger_bedrock_model_id" {
+  description = "Bedrock model ID for the MessengerAgent"
+  type        = string
+  default     = "anthropic.claude-3-sonnet-20240229-v1:0"
+}
+
 variable "enable_pipeline_schedule" {
   description = "Enable EventBridge schedule to run the pipeline automatically"
   type        = bool

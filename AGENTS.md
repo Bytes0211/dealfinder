@@ -6,7 +6,7 @@ This file provides guidance to AI assistants (Claude Code, Warp, etc.) when work
 
 Deal Finder is an AI-powered deal hunting system that discovers deals via RSS feeds, estimates prices using AWS Bedrock (Claude), and sends notifications for high-value opportunities. It's a serverless system on AWS, built by a solo developer.
 
-**Status:** Phase 3 of 5 complete. Infrastructure, data layer, and core pipeline are built. Next: notifications + API (Phase 4).
+**Status:** Phase 4 of 5 complete. Infrastructure, data layer, core pipeline, notifications, and REST API are built. Next: integration tests + production deploy (Phase 5).
 
 ## Architecture
 
@@ -46,7 +46,19 @@ src/dealfinder/
 │   ├── config.py           # AgentConfig (pydantic-settings, env_prefix=DEALFINDER_)
 │   ├── bedrock.py          # BedrockPriceEstimator, PriceEstimationResult
 │   ├── scanner.py          # ScannerAgent + Lambda handler
-│   └── evaluator.py        # EvaluatorAgent + Lambda handler
+│   ├── evaluator.py        # EvaluatorAgent + Lambda handler
+│   └── messenger.py        # MessengerAgent + Lambda handler (Phase 4)
+├── notifications/          # Notification dispatch clients (Phase 4)
+│   ├── pushover.py         # PushoverClient — send() via httpx
+│   └── ses.py              # SesClient — send_email() via boto3 sesv2
+├── api/                    # FastAPI REST API + Mangum (Phase 4)
+│   ├── main.py             # FastAPI app (lifespan) + Mangum handler
+│   ├── schemas.py          # Pydantic request/response models
+│   ├── deps.py             # get_db(), get_current_user_id() dependencies
+│   └── routes/
+│       ├── health.py       # GET /api/v1/health
+│       ├── deals.py        # GET /deals, /deals/top, /deals/{id}
+│       └── users.py        # POST /users, PUT /users/{id}/preferences
 ├── db/
 │   ├── models.py           # SQLAlchemy ORM models (5 models, 3 enums)
 │   ├── connection.py       # Async engine, session factory, context manager
@@ -63,7 +75,16 @@ tests/
 │   │   ├── conftest.py     # @compiles JSONB/UUID overrides for SQLite
 │   │   ├── test_bedrock.py
 │   │   ├── test_scanner.py
-│   │   └── test_evaluator.py
+│   │   ├── test_evaluator.py
+│   │   └── test_messenger.py   # Phase 4
+│   ├── notifications/          # Phase 4
+│   │   ├── test_pushover.py
+│   │   └── test_ses.py
+│   ├── api/                    # Phase 4
+│   │   ├── conftest.py     # TestClient + in-memory SQLite fixtures
+│   │   ├── test_health.py
+│   │   ├── test_deals.py
+│   │   └── test_users.py
 │   ├── db/test_models.py
 │   ├── data/test_repository.py
 │   └── search/test_*.py
@@ -74,7 +95,9 @@ infrastructure/
     ├── networking/         # VPC, subnets, VPC endpoints
     ├── data/               # S3, DynamoDB, Aurora, OpenSearch
     ├── monitoring/         # CloudWatch logs, alarms, dashboard
-    └── pipeline/           # SQS, Lambda, Step Functions, EventBridge, IAM
+    ├── pipeline/           # SQS, Lambda, Step Functions, EventBridge, IAM
+    ├── notifications/      # SNS topic, Messenger Lambda, SQS ESM (Phase 4)
+    └── api/                # API Lambda, API GW HTTP API, Cognito (Phase 4)
 ```
 
 ## Code Conventions
@@ -133,8 +156,10 @@ infrastructure/
     ├── networking/           # VPC, subnets, VPC endpoints
     ├── data/                 # S3, DynamoDB, Aurora, OpenSearch
     ├── monitoring/           # CloudWatch logs, alarms, dashboard
-    └── pipeline/             # SQS queues+DLQs, Lambda, Step Functions,
-                              # EventBridge schedule, IAM roles
+    ├── pipeline/             # SQS queues+DLQs, Lambda, Step Functions,
+    │                         # EventBridge schedule, IAM roles
+    ├── notifications/        # SNS, Messenger Lambda, SQS ESM, IAM (Phase 4)
+    └── api/                  # API Lambda, API GW HTTP API v2, Cognito (Phase 4)
 ```
 
 ### Key Principles
@@ -210,8 +235,14 @@ Feature flags keep idle costs at ~$4-10/month:
 | `developer/project-status.md` | Progress tracking and timeline |
 | `src/dealfinder/agents/scanner.py` | ScannerAgent Lambda (RSS → Aurora) |
 | `src/dealfinder/agents/evaluator.py` | EvaluatorAgent Lambda (Bedrock → discount) |
+| `src/dealfinder/agents/messenger.py` | MessengerAgent Lambda (SQS → Pushover/SES) |
 | `src/dealfinder/agents/bedrock.py` | BedrockPriceEstimator + PriceEstimationResult |
 | `src/dealfinder/agents/config.py` | AgentConfig pydantic-settings |
+| `src/dealfinder/notifications/pushover.py` | PushoverClient (httpx) |
+| `src/dealfinder/notifications/ses.py` | SesClient (boto3 sesv2) |
+| `src/dealfinder/api/main.py` | FastAPI app + Mangum Lambda handler |
+| `src/dealfinder/api/routes/deals.py` | Deal endpoints (list, top, detail) |
+| `src/dealfinder/api/routes/users.py` | User endpoints (create, preferences) |
 | `src/dealfinder/db/models.py` | All 5 ORM models |
 | `src/dealfinder/data/repository.py` | All 5 repository classes + BaseRepository |
 | `src/dealfinder/db/connection.py` | Async DB engine and session management |
@@ -220,6 +251,8 @@ Feature flags keep idle costs at ~$4-10/month:
 | `pyproject.toml` | Dependencies, tool config, build settings |
 | `infrastructure/environments/dev/` | Terraform dev environment |
 | `infrastructure/modules/pipeline/` | Pipeline Terraform module |
+| `infrastructure/modules/notifications/` | Notifications Terraform module |
+| `infrastructure/modules/api/` | API + Cognito Terraform module |
 
 ## What NOT to Do
 
@@ -231,6 +264,8 @@ Feature flags keep idle costs at ~$4-10/month:
 - Don't create heavyweight abstractions for things that only happen once.
 - Don't add monitoring infrastructure (Prometheus, Grafana) — CloudWatch is sufficient.
 - Don't use Step Functions `Pass` states for error paths — use `Fail` states with `Error`/`Cause` so failed executions show up in `ExecutionsFailed` metrics and alerting.
+- Don't access ORM relationships lazily in FastAPI route handlers — always use `selectinload()` in the query to avoid `MissingGreenlet` errors in async context.
+- Don't use `@app.on_event("startup")` in FastAPI — use the `lifespan` context manager pattern instead.
 
 ## Reference Documentation
 
