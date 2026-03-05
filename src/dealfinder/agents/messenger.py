@@ -326,7 +326,8 @@ class MessengerAgent:
             RuntimeError: If every configured channel fails, so SQS retries
                 the record rather than marking it delivered.
         """
-        if self._is_duplicate(deal_id):
+        loop = asyncio.get_running_loop()
+        if await loop.run_in_executor(None, self._is_duplicate, deal_id):
             return {
                 "deal_id": str(deal_id),
                 "status": "skipped",
@@ -346,7 +347,6 @@ class MessengerAgent:
                 "channels_attempted": 0,
             }
 
-        loop = asyncio.get_running_loop()
         title, message = await loop.run_in_executor(None, self._craft_message, deal)
 
         any_sent = await self._dispatch_to_user(deal, title, message)

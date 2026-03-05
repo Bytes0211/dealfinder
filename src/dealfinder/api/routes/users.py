@@ -9,6 +9,7 @@ import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import bcrypt
@@ -61,7 +62,14 @@ async def create_user(
         hashed_password=hashed,
         full_name=body.full_name,
     )
-    user = await repo.create(user)
+    try:
+        user = await repo.create(user)
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Email address or username already registered",
+        )
     return UserResponse.model_validate(user)
 
 

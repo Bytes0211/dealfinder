@@ -4,7 +4,10 @@ POST /users                      — create account
 PUT  /users/{id}/preferences     — update preferences (auth required)
 """
 
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
+
+from sqlalchemy.exc import IntegrityError
 
 
 class TestCreateUser:
@@ -65,6 +68,23 @@ class TestCreateUser:
             "password": "short",
         })
         assert response.status_code == 422
+
+    def test_returns_409_on_integrity_error(self, client) -> None:
+        """A race condition causing IntegrityError on repo.create should return 409."""
+        mock_repo = MagicMock()
+        mock_repo.get_by_email = AsyncMock(return_value=None)
+        mock_repo.get_by_username = AsyncMock(return_value=None)
+        mock_repo.create = AsyncMock(
+            side_effect=IntegrityError("INSERT", {}, Exception("unique constraint"))
+        )
+
+        with patch("dealfinder.api.routes.users.UserRepository", return_value=mock_repo):
+            response = client.post("/api/v1/users", json={
+                "email": "race@example.com",
+                "username": "raceuser",
+                "password": "password123",
+            })
+        assert response.status_code == 409
 
 
 class TestUpdateUserPreferences:
