@@ -87,6 +87,12 @@ variable "alarm_sns_topic_arn" {
   default     = ""
 }
 
+variable "create_cloudwatch_alarms" {
+  description = "Whether to create CloudWatch alarms (requires alarm_sns_topic_arn)"
+  type        = bool
+  default     = false
+}
+
 variable "cors_allowed_origins" {
   description = "List of allowed CORS origins for the API Gateway. Defaults to wildcard."
   type        = list(string)

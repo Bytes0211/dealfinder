@@ -159,8 +159,9 @@ module "pipeline" {
   vpc_cidr           = module.networking.vpc_cidr
   private_subnet_ids = module.networking.private_subnet_ids
 
-  log_retention_days  = var.log_retention_days
-  alarm_sns_topic_arn = module.cloudwatch.alarms_topic_arn
+  log_retention_days       = var.log_retention_days
+  alarm_sns_topic_arn      = module.cloudwatch.alarms_topic_arn
+  create_cloudwatch_alarms = true
 
   enable_schedule     = var.enable_pipeline_schedule
   schedule_expression = var.pipeline_schedule_expression
@@ -187,8 +188,9 @@ module "notifications" {
   lambda_security_group_id        = module.pipeline.lambda_security_group_id
   notification_dispatch_queue_arn = module.pipeline.notification_dispatch_queue_arn
 
-  log_retention_days  = var.log_retention_days
-  alarm_sns_topic_arn = module.cloudwatch.alarms_topic_arn
+  log_retention_days       = var.log_retention_days
+  alarm_sns_topic_arn      = module.cloudwatch.alarms_topic_arn
+  create_cloudwatch_alarms = true
 
   bedrock_model_id    = var.messenger_bedrock_model_id
   db_secret_arn       = var.db_secret_arn
@@ -214,8 +216,9 @@ module "api" {
 
   lambda_security_group_id = module.pipeline.lambda_security_group_id
 
-  log_retention_days  = var.log_retention_days
-  alarm_sns_topic_arn = module.cloudwatch.alarms_topic_arn
+  log_retention_days       = var.log_retention_days
+  alarm_sns_topic_arn      = module.cloudwatch.alarms_topic_arn
+  create_cloudwatch_alarms = true
 
   db_secret_arn = var.db_secret_arn
   db_host       = try(module.aurora[0].cluster_endpoint, "")

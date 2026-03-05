@@ -35,6 +35,12 @@ variable "alarm_sns_topic_arn" {
   default     = ""
 }
 
+variable "create_cloudwatch_alarms" {
+  description = "Whether to create CloudWatch alarms (requires alarm_sns_topic_arn)"
+  type        = bool
+  default     = false
+}
+
 # EventBridge schedule
 variable "enable_schedule" {
   description = "Enable EventBridge schedule to trigger the pipeline automatically"

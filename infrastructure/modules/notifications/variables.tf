@@ -104,6 +104,12 @@ variable "alarm_sns_topic_arn" {
   default     = ""
 }
 
+variable "create_cloudwatch_alarms" {
+  description = "Whether to create CloudWatch alarms (requires alarm_sns_topic_arn)"
+  type        = bool
+  default     = false
+}
+
 variable "tags" {
   description = "Resource tags"
   type        = map(string)

@@ -272,7 +272,7 @@ resource "aws_lambda_permission" "api_gateway" {
 # ─────────────────────────────────────────────
 
 resource "aws_cloudwatch_metric_alarm" "api_errors" {
-  count               = var.alarm_sns_topic_arn != "" ? 1 : 0
+  count               = var.create_cloudwatch_alarms ? 1 : 0
   alarm_name          = "${local.prefix}-api-5xx-errors"
   alarm_description   = "API Gateway 5xx error rate"
   namespace           = "AWS/Lambda"

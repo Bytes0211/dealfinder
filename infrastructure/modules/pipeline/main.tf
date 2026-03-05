@@ -9,9 +9,9 @@ locals {
 # Keeps scanner discoveries available for additional consumers without tight coupling.
 
 resource "aws_sqs_queue" "deal_processing_dlq" {
-  name                       = "${local.prefix}-deal-processing-dlq"
-  message_retention_seconds  = 1209600 # 14 days — long retention for investigation
-  kms_master_key_id          = "alias/aws/sqs"
+  name                      = "${local.prefix}-deal-processing-dlq"
+  message_retention_seconds = 1209600 # 14 days — long retention for investigation
+  kms_master_key_id         = "alias/aws/sqs"
 
   tags = merge(var.tags, { Name = "${local.prefix}-deal-processing-dlq" })
 }
@@ -133,9 +133,9 @@ resource "aws_iam_role_policy" "scanner_inline" {
         Resource = "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.project_name}-${var.environment}-*"
       },
       {
-        Sid    = "SecretsManager"
-        Effect = "Allow"
-        Action = ["secretsmanager:GetSecretValue"]
+        Sid      = "SecretsManager"
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
         Resource = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/${var.environment}/*"
       },
     ]
@@ -172,9 +172,9 @@ resource "aws_iam_role_policy" "evaluator_inline" {
         Resource = "${aws_cloudwatch_log_group.evaluator.arn}:*"
       },
       {
-        Sid    = "Bedrock"
-        Effect = "Allow"
-        Action = ["bedrock:InvokeModel"]
+        Sid      = "Bedrock"
+        Effect   = "Allow"
+        Action   = ["bedrock:InvokeModel"]
         Resource = "arn:aws:bedrock:${var.aws_region}::foundation-model/${var.bedrock_model_id}"
       },
       {
@@ -189,9 +189,9 @@ resource "aws_iam_role_policy" "evaluator_inline" {
         Resource = "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.project_name}-${var.environment}-*"
       },
       {
-        Sid    = "SecretsManager"
-        Effect = "Allow"
-        Action = ["secretsmanager:GetSecretValue"]
+        Sid      = "SecretsManager"
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
         Resource = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/${var.environment}/*"
       },
     ]
@@ -415,11 +415,11 @@ resource "aws_sfn_state_machine" "pipeline" {
     StartAt = "ScanFeeds"
     States = {
       ScanFeeds = {
-        Type     = "Task"
-        Resource = aws_lambda_function.scanner.arn
-        Comment  = "Fetch RSS feeds and persist new deals; returns new_deal_ids list"
+        Type       = "Task"
+        Resource   = aws_lambda_function.scanner.arn
+        Comment    = "Fetch RSS feeds and persist new deals; returns new_deal_ids list"
         ResultPath = "$"
-        Next = "ProcessDeals"
+        Next       = "ProcessDeals"
         Retry = [
           {
             ErrorEquals     = ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException"]
@@ -450,11 +450,11 @@ resource "aws_sfn_state_machine" "pipeline" {
           StartAt = "EvaluateDeal"
           States = {
             EvaluateDeal = {
-              Type     = "Task"
-              Resource = aws_lambda_function.evaluator.arn
-              Comment  = "Estimate price via Bedrock and calculate discount"
+              Type       = "Task"
+              Resource   = aws_lambda_function.evaluator.arn
+              Comment    = "Estimate price via Bedrock and calculate discount"
               ResultPath = "$"
-              Next = "IsHighValue"
+              Next       = "IsHighValue"
               Retry = [
                 {
                   ErrorEquals     = ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException", "ClientError"]
@@ -488,7 +488,7 @@ resource "aws_sfn_state_machine" "pipeline" {
               Resource = "arn:aws:states:::sqs:sendMessage"
               Comment  = "Enqueue deal_id for the Messenger Agent (Phase 4)"
               Parameters = {
-                QueueUrl        = aws_sqs_queue.notification_dispatch.url
+                QueueUrl = aws_sqs_queue.notification_dispatch.url
                 # Wrap deal_id in a JSON object so Phase 4 consumers can use
                 # json.loads(record["body"])["deal_id"] consistently.
                 "MessageBody.$" = "States.Format('{\"deal_id\": \"{}\"}', $.deal_id)"
@@ -601,7 +601,7 @@ resource "aws_cloudwatch_event_target" "pipeline_schedule" {
 # ─────────────────────────────────────────────
 
 resource "aws_cloudwatch_metric_alarm" "deal_processing_dlq" {
-  count               = var.alarm_sns_topic_arn != "" ? 1 : 0
+  count               = var.create_cloudwatch_alarms ? 1 : 0
   alarm_name          = "${local.prefix}-deal-processing-dlq-depth"
   alarm_description   = "Messages in deal-processing DLQ — indicates pipeline failures"
   namespace           = "AWS/SQS"
@@ -618,7 +618,7 @@ resource "aws_cloudwatch_metric_alarm" "deal_processing_dlq" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "notification_dispatch_dlq" {
-  count               = var.alarm_sns_topic_arn != "" ? 1 : 0
+  count               = var.create_cloudwatch_alarms ? 1 : 0
   alarm_name          = "${local.prefix}-notification-dispatch-dlq-depth"
   alarm_description   = "Messages in notification-dispatch DLQ — indicates dispatch failures"
   namespace           = "AWS/SQS"

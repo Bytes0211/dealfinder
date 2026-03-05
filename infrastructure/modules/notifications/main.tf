@@ -116,9 +116,9 @@ resource "aws_iam_role_policy" "messenger_inline" {
         Resource = aws_sns_topic.deal_notifications.arn
       },
       {
-        Sid    = "Bedrock"
-        Effect = "Allow"
-        Action = ["bedrock:InvokeModel"]
+        Sid      = "Bedrock"
+        Effect   = "Allow"
+        Action   = ["bedrock:InvokeModel"]
         Resource = "arn:aws:bedrock:${var.aws_region}::foundation-model/${var.bedrock_model_id}"
       },
       {
@@ -185,14 +185,14 @@ resource "aws_lambda_function" "messenger" {
 
   environment {
     variables = {
-      DEALFINDER_BEDROCK_REGION     = var.aws_region
-      DEALFINDER_BEDROCK_MODEL_ID   = var.bedrock_model_id
-      DEALFINDER_SES_SENDER_EMAIL   = var.ses_sender_email
-      DEALFINDER_DEDUP_TABLE_NAME   = aws_dynamodb_table.dedup.name
-      DB_HOST                       = var.db_host
-      DB_NAME                       = var.db_name
-      DB_SECRET_ARN                 = var.db_secret_arn
-      PUSHOVER_SECRET_ARN           = var.pushover_secret_arn
+      DEALFINDER_BEDROCK_REGION   = var.aws_region
+      DEALFINDER_BEDROCK_MODEL_ID = var.bedrock_model_id
+      DEALFINDER_SES_SENDER_EMAIL = var.ses_sender_email
+      DEALFINDER_DEDUP_TABLE_NAME = aws_dynamodb_table.dedup.name
+      DB_HOST                     = var.db_host
+      DB_NAME                     = var.db_name
+      DB_SECRET_ARN               = var.db_secret_arn
+      PUSHOVER_SECRET_ARN         = var.pushover_secret_arn
     }
   }
 
@@ -224,7 +224,7 @@ resource "aws_lambda_event_source_mapping" "notification_dispatch" {
 # ─────────────────────────────────────────────
 
 resource "aws_cloudwatch_metric_alarm" "messenger_errors" {
-  count               = var.alarm_sns_topic_arn != "" ? 1 : 0
+  count               = var.create_cloudwatch_alarms ? 1 : 0
   alarm_name          = "${local.prefix}-messenger-errors"
   alarm_description   = "Messenger Lambda error rate — indicates notification dispatch failures"
   namespace           = "AWS/Lambda"
