@@ -94,8 +94,8 @@ data "aws_iam_policy_document" "deploy" {
       "s3:ListBucket",
     ]
     resources = [
-      "arn:aws:s3:::dealfinder-prod-frontend-*",
-      "arn:aws:s3:::dealfinder-prod-frontend-*/*",
+      "arn:aws:s3:::dealfinder-frontend-prod*",
+      "arn:aws:s3:::dealfinder-frontend-prod*/*",
     ]
   }
 
