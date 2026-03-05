@@ -57,11 +57,15 @@ data "aws_iam_policy_document" "github_assume_role" {
       values   = ["sts.amazonaws.com"]
     }
 
-    # Scope to pushes/workflow_dispatch on main branch of this repo only
+    # Allow main branch pushes and jobs using the 'production' environment
+    # (environment: production in a job changes the sub to :environment:production)
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:Bytes0211/dealfinder:ref:refs/heads/main"]
+      values = [
+        "repo:Bytes0211/dealfinder:ref:refs/heads/main",
+        "repo:Bytes0211/dealfinder:environment:production",
+      ]
     }
   }
 }
