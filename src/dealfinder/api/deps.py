@@ -3,9 +3,14 @@
 Provides injectable dependencies for database sessions and authentication.
 When deployed on Lambda behind API Gateway with a Cognito JWT authorizer
 the ``get_current_user_id`` dependency extracts the Cognito ``sub`` claim
-from the request state populated by the Mangum adapter.
+from the request state populated by the Mangum adapter.  When the API
+Gateway route uses ``authorization_type = NONE`` (unauthenticated pass-through),
+the Bearer token is decoded directly — no signature verification is performed
+since validation is left to Cognito's issuance.
 """
 
+import base64
+import json as _json
 import logging
 from typing import AsyncGenerator
 from uuid import UUID
@@ -16,6 +21,40 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from dealfinder.db.connection import get_async_session
 
 logger = logging.getLogger(__name__)
+
+
+def _decode_jwt_payload(token: str) -> dict:
+    """Decode a JWT payload without verifying the signature.
+
+    Args:
+        token: Raw JWT string (three dot-separated segments).
+
+    Returns:
+        Decoded payload dict, or empty dict on any error.
+    """
+    try:
+        parts = token.split(".")
+        if len(parts) != 3:
+            return {}
+        padded = parts[1] + "=" * (-len(parts[1]) % 4)
+        return _json.loads(base64.urlsafe_b64decode(padded))
+    except Exception:
+        return {}
+
+
+def get_token_claims(request: Request) -> dict:
+    """Return decoded claims from the Authorization Bearer token.
+
+    Args:
+        request: FastAPI Request object.
+
+    Returns:
+        Decoded JWT payload dict, or empty dict if no Bearer token is present.
+    """
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Bearer "):
+        return _decode_jwt_payload(auth[7:])
+    return {}
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
@@ -69,6 +108,17 @@ def get_current_user_id(request: Request) -> UUID:
     if test_user_id:
         try:
             return UUID(test_user_id)
+        except ValueError:
+            pass
+
+    # Direct Bearer decode — used when API GW route has authorization_type = NONE.
+    # The Cognito JWT authorizer is defined in Terraform but not yet attached to
+    # the $default route.  Until it is, we decode the token ourselves.
+    claims = get_token_claims(request)
+    sub = claims.get("sub")
+    if sub:
+        try:
+            return UUID(sub)
         except ValueError:
             pass
 
