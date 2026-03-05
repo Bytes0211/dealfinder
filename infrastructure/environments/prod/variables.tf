@@ -193,3 +193,11 @@ variable "messenger_bedrock_model_id" {
   type        = string
   default     = "anthropic.claude-3-sonnet-20240229-v1:0"
 }
+
+# ── Cognito Hosted UI ────────────────────────────────────────────────────────
+
+variable "cognito_domain_prefix" {
+  description = "Prefix for Cognito Hosted UI domain (must be globally unique, e.g. 'dealfinder-prod-abc123')"
+  type        = string
+  default     = "dealfinder-prod"
+}

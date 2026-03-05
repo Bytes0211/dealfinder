@@ -121,6 +121,11 @@ output "cognito_user_pool_endpoint" {
   value       = module.api.cognito_user_pool_endpoint
 }
 
+output "cognito_hosted_ui_domain" {
+  description = "Cognito Hosted UI base domain"
+  value       = module.api.cognito_hosted_ui_domain
+}
+
 # ── Frontend (Phase 6) ───────────────────────────────────────────────────────
 
 output "frontend_bucket_name" {

@@ -42,12 +42,26 @@ resource "aws_cognito_user_pool" "main" {
   tags = var.tags
 }
 
+resource "aws_cognito_user_pool_domain" "main" {
+  count        = var.cognito_domain_prefix != "" ? 1 : 0
+  domain       = var.cognito_domain_prefix
+  user_pool_id = aws_cognito_user_pool.main.id
+}
+
 resource "aws_cognito_user_pool_client" "api" {
   name         = "${local.prefix}-api-client"
   user_pool_id = aws_cognito_user_pool.main.id
 
   generate_secret                      = false
-  allowed_oauth_flows_user_pool_client = false
+  allowed_oauth_flows_user_pool_client = var.cognito_domain_prefix != "" ? true : false
+
+  allowed_oauth_flows  = ["implicit"]
+  allowed_oauth_scopes = ["openid", "email", "profile"]
+
+  callback_urls = var.cognito_callback_urls
+  logout_urls   = var.cognito_logout_urls
+
+  supported_identity_providers = ["COGNITO"]
 
   explicit_auth_flows = [
     "ALLOW_USER_SRP_AUTH",

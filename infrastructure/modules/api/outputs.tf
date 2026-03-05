@@ -37,3 +37,8 @@ output "cognito_client_id" {
   description = "ID of the Cognito user pool client for the API"
   value       = aws_cognito_user_pool_client.api.id
 }
+
+output "cognito_hosted_ui_domain" {
+  description = "Cognito Hosted UI base domain (e.g. dealfinder-prod.auth.us-east-1.amazoncognito.com)"
+  value       = var.cognito_domain_prefix != "" ? "${var.cognito_domain_prefix}.auth.${var.aws_region}.amazoncognito.com" : null
+}

@@ -81,6 +81,24 @@ variable "cognito_user_pool_name" {
   default     = ""
 }
 
+variable "cognito_domain_prefix" {
+  description = "Prefix for the Cognito Hosted UI domain (e.g. 'dealfinder-prod' → dealfinder-prod.auth.us-east-1.amazoncognito.com)"
+  type        = string
+  default     = ""
+}
+
+variable "cognito_callback_urls" {
+  description = "Allowed OAuth callback URLs for the Cognito app client (e.g. CloudFront /auth/callback)"
+  type        = list(string)
+  default     = ["http://localhost:5173/auth/callback"]
+}
+
+variable "cognito_logout_urls" {
+  description = "Allowed logout URLs for the Cognito app client"
+  type        = list(string)
+  default     = ["http://localhost:5173/login"]
+}
+
 variable "alarm_sns_topic_arn" {
   description = "SNS topic ARN for CloudWatch alarms"
   type        = string

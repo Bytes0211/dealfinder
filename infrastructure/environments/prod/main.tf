@@ -227,6 +227,16 @@ module "api" {
   db_host       = try(module.aurora[0].cluster_endpoint, "")
   db_name       = var.aurora_database_name
 
+  cognito_domain_prefix = var.cognito_domain_prefix
+  cognito_callback_urls = var.enable_frontend ? [
+    "https://${module.frontend[0].cloudfront_domain_name}/auth/callback",
+    "http://localhost:5173/auth/callback",
+  ] : ["http://localhost:5173/auth/callback"]
+  cognito_logout_urls = var.enable_frontend ? [
+    "https://${module.frontend[0].cloudfront_domain_name}/login",
+    "http://localhost:5173/login",
+  ] : ["http://localhost:5173/login"]
+
   cors_allowed_origins = var.enable_frontend ? [
     "https://${module.frontend[0].cloudfront_domain_name}",
   ] : ["*"]
