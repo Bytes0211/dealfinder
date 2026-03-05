@@ -163,14 +163,19 @@ class TestUserModel:
         """Test User default values are defined in the model."""
         from sqlalchemy import inspect
         mapper = inspect(User)
-        
+
         is_active_col = mapper.columns["is_active"]
         is_verified_col = mapper.columns["is_verified"]
-        discount_threshold_col = mapper.columns["discount_threshold"]
-        
+
         assert is_active_col.default is not None
         assert is_verified_col.default is not None
-        assert discount_threshold_col.default is not None
+
+    def test_user_has_phone_number_column(self):
+        """phone_number column should exist and be nullable."""
+        from sqlalchemy import inspect
+        mapper = inspect(User)
+        phone_col = mapper.columns["phone_number"]
+        assert phone_col.nullable is True
 
     def test_user_tablename(self):
         """Test table name is correct."""

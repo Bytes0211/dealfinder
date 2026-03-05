@@ -191,10 +191,7 @@ class User(Base):
     
     # Preferences
     notification_preferences: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict)
-    discount_threshold: Mapped[Decimal] = mapped_column(
-        Numeric(5, 2), default=Decimal("20.00")
-    )
-    preferred_categories: Mapped[Optional[list]] = mapped_column(JSONB, default=list)
+    phone_number: Mapped[Optional[str]] = mapped_column(String(20))
     
     # External integrations
     

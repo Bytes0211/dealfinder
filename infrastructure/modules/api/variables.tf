@@ -117,6 +117,19 @@ variable "cors_allowed_origins" {
   default     = ["*"]
 }
 
+variable "tavily_api_key" {
+  description = "Tavily Search API key for the web search endpoint"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "sns_topic_arn" {
+  description = "ARN of the SNS topic used for deal notifications (for sns:Subscribe IAM permission)"
+  type        = string
+  default     = ""
+}
+
 variable "tags" {
   description = "Resource tags"
   type        = map(string)

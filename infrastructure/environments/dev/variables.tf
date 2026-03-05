@@ -150,6 +150,14 @@ variable "db_secret_arn" {
   default     = ""
 }
 
+# Phase 6 — Tavily Search
+variable "tavily_api_key" {
+  description = "Tavily Search API key"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 # Phase 4 — Notifications
 variable "ses_sender_email" {
   description = "Verified SES sender email address for deal alert emails"

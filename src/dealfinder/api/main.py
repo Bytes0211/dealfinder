@@ -14,7 +14,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from mangum import Mangum
 
-from dealfinder.api.routes import deals, health, users
+from dealfinder.api.routes import deals, health, search, users
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +56,7 @@ app.add_middleware(
 app.include_router(health.router, prefix="/api/v1")
 app.include_router(deals.router, prefix="/api/v1")
 app.include_router(users.router, prefix="/api/v1")
+app.include_router(search.router, prefix="/api/v1")
 
 
 # AWS Lambda entry point — Mangum translates API Gateway events to ASGI

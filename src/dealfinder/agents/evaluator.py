@@ -6,18 +6,20 @@ high-value deals so they can be forwarded to the notification stage.
 """
 
 import asyncio
+import json
 import logging
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
+import boto3
 from botocore.exceptions import ClientError
 
 from dealfinder.agents.bedrock import BedrockPriceEstimator, PriceEstimationResult
 from dealfinder.agents.config import AgentConfig
-from dealfinder.data.repository import DealRepository, PriceEstimateRepository
+from dealfinder.data.repository import DealRepository, PriceEstimateRepository, UserRepository
 from dealfinder.db.connection import get_async_session
-from dealfinder.db.models import DealStatus, PriceEstimate
+from dealfinder.db.models import Deal, DealStatus, PriceEstimate
 
 logger = logging.getLogger(__name__)
 
@@ -211,6 +213,10 @@ class EvaluatorAgent:
                 f"({discount}% discount, high_value={is_high_value})"
             )
 
+        # Match evaluated deal against all users' watchlist feeds and notify
+        if is_high_value or discount > 0:
+            await self._notify_watchlist_matches(deal_id, updated_deal, discount)
+
         return {
             "deal_id": str(deal_id),
             "status": "evaluated",
@@ -219,6 +225,73 @@ class EvaluatorAgent:
             "estimated_value": float(result.estimated_price),
             "confidence": float(result.confidence),
         }
+
+    async def _notify_watchlist_matches(
+        self,
+        deal_id: UUID,
+        deal: Deal,
+        discount: Decimal,
+    ) -> None:
+        """Enqueue notifications for users whose watchlist feeds match this deal.
+
+        Scans all active users' ``notification_preferences.saved_feeds`` for
+        entries whose ``query`` keywords appear in the deal title AND whose
+        ``min_discount`` threshold is met. Matching users have a notification
+        message enqueued to the SQS dispatch queue.
+
+        Args:
+            deal_id: UUID of the evaluated deal.
+            deal: Evaluated Deal instance.
+            discount: Calculated discount percentage.
+        """
+        if not self.config.notification_queue_url:
+            return
+
+        try:
+            async with get_async_session() as session:
+                user_repo = UserRepository(session)
+                users = await user_repo.find_active_users()
+        except Exception as exc:
+            logger.warning(f"Watchlist match: failed to load users: {exc}")
+            return
+
+        deal_title_lower = deal.title.lower()
+        matched_user_ids: list[str] = []
+
+        for user in users:
+            prefs = user.notification_preferences or {}
+            saved_feeds: list[dict] = prefs.get("saved_feeds", []) or []
+            for feed in saved_feeds:
+                query_str = feed.get("query", "").strip().lower()
+                min_discount = float(feed.get("min_discount", 0))
+                if not query_str:
+                    continue
+                keywords = [w for w in query_str.split() if len(w) > 2][:3]
+                if any(kw in deal_title_lower for kw in keywords):
+                    if float(discount) >= min_discount:
+                        matched_user_ids.append(str(user.id))
+                        break  # one match per user is enough
+
+        if not matched_user_ids:
+            return
+
+        logger.info(
+            f"Watchlist match: deal {deal_id} matched {len(matched_user_ids)} users — enqueuing"
+        )
+
+        loop = asyncio.get_running_loop()
+        sqs = boto3.client("sqs", region_name=self.config.bedrock_region)
+        message_body = json.dumps({"deal_id": str(deal_id)})
+        try:
+            await loop.run_in_executor(
+                None,
+                lambda: sqs.send_message(
+                    QueueUrl=self.config.notification_queue_url,
+                    MessageBody=message_body,
+                ),
+            )
+        except Exception as exc:
+            logger.error(f"Watchlist match: failed to enqueue notification for deal {deal_id}: {exc}")
 
     async def run(self, event: dict) -> dict:
         """Process a Step Functions evaluation event.

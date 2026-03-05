@@ -196,9 +196,11 @@ module "api" {
   log_retention_days  = var.log_retention_days
   alarm_sns_topic_arn = module.cloudwatch.alarms_topic_arn
 
-  db_secret_arn = var.db_secret_arn
-  db_host       = try(module.aurora[0].cluster_endpoint, "")
-  db_name       = var.aurora_database_name
+  db_secret_arn  = var.db_secret_arn
+  db_host        = try(module.aurora[0].cluster_endpoint, "")
+  db_name        = var.aurora_database_name
+  tavily_api_key = var.tavily_api_key
+  sns_topic_arn  = module.notifications.sns_topic_arn
 
   tags = local.common_tags
 }

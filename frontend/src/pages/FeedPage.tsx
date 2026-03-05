@@ -1,194 +1,201 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { DealCard } from '../components/DealCard';
-import { FilterBar } from '../components/FilterBar';
 import { Pagination } from '../components/Pagination';
-import { useDeals, useUserPreferences, useUpdatePreferences } from '../hooks';
-import { isAuthenticated, getUserId } from '../auth';
-import { login } from '../auth';
+import { useUserPreferences, useUpdatePreferences, useWatchlistMatches } from '../hooks';
+import { isAuthenticated, getUserId, login } from '../auth';
 import type { SavedFeed } from '../api/types';
 
 const PAGE_SIZE = 20;
+
+/** Quality badge — mirrors SearchPage display for consistency in the feed. */
+function QualityBadge({ score }: { score: number | null }) {
+  if (score === null) return null;
+  if (score >= 8) return <span className="quality-badge quality-badge--great">🟢 Great</span>;
+  if (score >= 5) return <span className="quality-badge quality-badge--fair">🟡 Fair</span>;
+  return <span className="quality-badge quality-badge--weak">🔴 Weak</span>;
+}
 
 export function FeedPage() {
   const authed = isAuthenticated();
   const userId = getUserId() ?? '';
 
-  // Pending (selected but not yet searched)
-  const [pendingCategory, setPendingCategory] = useState('');
-  const [pendingStatus, setPendingStatus] = useState('');
+  // Watchlist edits
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDiscount, setEditDiscount] = useState<number>(20);
 
-  // Active (committed — what the query uses)
-  const [activeCategory, setActiveCategory] = useState('');
-  const [activeStatus, setActiveStatus] = useState('');
-  const [offset, setOffset] = useState(0);
-  const [hasSearched, setHasSearched] = useState(false);
-  const [savedFeedMsg, setSavedFeedMsg] = useState('');
+  // Matched deals pagination
+  const [matchOffset, setMatchOffset] = useState(0);
 
-  // User preferences (for saved feeds panel)
   const { data: userPrefs } = useUserPreferences(authed ? userId : '');
   const { mutate: savePrefs } = useUpdatePreferences(userId);
 
   const savedFeeds: SavedFeed[] =
-    (userPrefs?.notification_preferences?.saved_feeds as SavedFeed[] | undefined) ?? [];
+    ((userPrefs?.notification_preferences?.saved_feeds as SavedFeed[] | undefined) ?? []);
 
-  // Auto-load first saved feed on mount when authenticated
-  useEffect(() => {
-    if (authed && savedFeeds.length > 0 && !hasSearched) {
-      const first = savedFeeds[0];
-      setPendingCategory(first.category);
-      setPendingStatus(first.status);
-      setActiveCategory(first.category);
-      setActiveStatus(first.status);
-      setHasSearched(true);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userPrefs]);
+  const {
+    data: matchData,
+    isLoading: matchLoading,
+    isError: matchError,
+  } = useWatchlistMatches(userId, PAGE_SIZE, matchOffset, authed && savedFeeds.length > 0);
 
-  const { data, isLoading, isError } = useDeals(
-    { category: activeCategory || undefined, status: activeStatus || undefined, limit: PAGE_SIZE, offset },
-    { enabled: hasSearched },
-  );
+  // ── Watchlist helpers ──────────────────────────────────────
 
-  function handleSearch() {
-    setActiveCategory(pendingCategory);
-    setActiveStatus(pendingStatus);
-    setOffset(0);
-    setHasSearched(true);
-    setSavedFeedMsg('');
+  function startEdit(feed: SavedFeed) {
+    setEditingId(feed.id);
+    setEditDiscount(feed.min_discount);
   }
 
-  function handleReset() {
-    setPendingCategory('');
-    setPendingStatus('');
-    setActiveCategory('');
-    setActiveStatus('');
-    setOffset(0);
-    setHasSearched(false);
-    setSavedFeedMsg('');
-  }
-
-  const isSaved = savedFeeds.some(
-    (f) => f.category === activeCategory && f.status === activeStatus
-  );
-
-  function handleSave() {
-    if (!authed) {
-      setSavedFeedMsg('Log in to save feeds.');
-      return;
-    }
-    if (isSaved) return;
-    const updated: SavedFeed[] = [...savedFeeds, { category: activeCategory, status: activeStatus }];
-    savePrefs({ saved_feeds: updated }, {
-      onSuccess: () => setSavedFeedMsg('Feed saved ✔'),
-      onError: () => setSavedFeedMsg('Failed to save feed.'),
-    });
-  }
-
-  const handleDeleteFeed = useCallback((feed: SavedFeed) => {
-    const updated = savedFeeds.filter(
-      (f) => !(f.category === feed.category && f.status === feed.status)
+  function commitEdit(feed: SavedFeed) {
+    const updated = savedFeeds.map((f) =>
+      f.id === feed.id ? { ...f, min_discount: editDiscount } : f,
     );
     savePrefs({ saved_feeds: updated });
-  }, [savedFeeds, savePrefs]);
+    setEditingId(null);
+  }
 
-  // ── Render ──────────────────────────────────────────────────
+  function removeFeed(feed: SavedFeed) {
+    const updated = savedFeeds.filter((f) => f.id !== feed.id);
+    savePrefs({ saved_feeds: updated });
+  }
+
+  // ── Render ───────────────────────────────────────────
+
+  if (!authed) {
+    return (
+      <div className="page page--centered">
+        <p className="state-msg">Log in to see your watchlist and deal matches.</p>
+        <button onClick={login} className="btn btn-primary">Log in</button>
+      </div>
+    );
+  }
 
   return (
     <div className="page">
-      <h1>Deal Feed</h1>
-
-      <FilterBar
-        category={pendingCategory}
-        status={pendingStatus}
-        hasSearched={hasSearched}
-        isSaved={isSaved}
-        onCategoryChange={setPendingCategory}
-        onStatusChange={setPendingStatus}
-        onSearch={handleSearch}
-        onSave={handleSave}
-        onReset={handleReset}
-      />
-      {savedFeedMsg && (
-        <p className={`state-msg ${savedFeedMsg.startsWith('Failed') || savedFeedMsg.startsWith('Log') ? 'state-msg--error' : 'state-msg--ok'}`}>
-          {savedFeedMsg}
-        </p>
-      )}
-
-      {/* Saved feeds panel */}
-      {authed && savedFeeds.length > 0 && (
-        <div className="saved-feeds-panel">
-          <span className="saved-feeds-label">My feeds:</span>
-          {savedFeeds.map((feed) => (
-            <span
-              key={`${feed.category}|${feed.status}`}
-              className={`saved-feed-card ${
-                feed.category === activeCategory && feed.status === activeStatus
-                  ? 'saved-feed-card--active' : ''
-              }`}
-            >
-              <button
-                className="saved-feed-card-btn"
-                onClick={() => {
-                  setPendingCategory(feed.category);
-                  setPendingStatus(feed.status);
-                  setActiveCategory(feed.category);
-                  setActiveStatus(feed.status);
-                  setOffset(0);
-                  setHasSearched(true);
-                  setSavedFeedMsg('');
-                }}
-              >
-                {feed.category}{feed.status ? ` · ${feed.status}` : ''}
-              </button>
-              <button
-                className="saved-feed-delete"
-                onClick={() => handleDeleteFeed(feed)}
-                aria-label="Remove feed"
-              >×</button>
-            </span>
-          ))}
+      {/* ──────────── Section A: Watchlist ──────────── */}
+      <section className="feed-section">
+        <div className="feed-section-header">
+          <h2>My Watchlist</h2>
+          <Link to="/search" className="btn btn-outline btn-sm">+ New Search</Link>
         </div>
-      )}
 
-      {/* Empty states */}
-      {!authed && !hasSearched && (
-        <div className="page page--centered">
-          <p className="state-msg">Log in to see your saved deal feed.</p>
-          <button onClick={login} className="btn btn-primary">Log in</button>
-        </div>
-      )}
-      {authed && !hasSearched && savedFeeds.length === 0 && (
-        <p className="state-msg">
-          Your account has no saved feeds. Use the search above to find deals and save your feed.
-        </p>
-      )}
+        {savedFeeds.length === 0 ? (
+          <p className="state-msg">
+            No saved feeds yet.{' '}
+            <Link to="/search">Search for a deal</Link> and save it to start watching.
+          </p>
+        ) : (
+          <div className="watchlist-list">
+            {savedFeeds.map((feed) => (
+              <div key={feed.id} className="watchlist-card">
+                <div className="watchlist-card-main">
+                  <a
+                    href={feed.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="watchlist-card-title"
+                  >
+                    {feed.title}
+                  </a>
+                  <span className="watchlist-card-query">"{feed.query}"</span>
+                  <div className="watchlist-card-meta">
+                    {feed.current_price && (
+                      <span className="watchlist-card-price">{feed.current_price}</span>
+                    )}
+                    <QualityBadge score={feed.quality_score} />
+                  </div>
+                </div>
 
-      {/* Results */}
-      {hasSearched && (
-        <>
-          {isLoading && <p className="state-msg">Loading deals…</p>}
-          {isError && <p className="state-msg state-msg--error">Failed to load deals. Is the API running?</p>}
-          {data && (
-            <>
-              <p className="result-count">{data.total} deals found</p>
-              <div className="deal-grid">
-                {data.items.map((deal) => (
-                  <DealCard key={deal.id} deal={deal} />
-                ))}
+                <div className="watchlist-card-actions">
+                  {editingId === feed.id ? (
+                    <>
+                      <label className="watchlist-discount-edit">
+                        <span>Min&nbsp;%</span>
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={editDiscount}
+                          onChange={(e) => setEditDiscount(Number(e.target.value))}
+                          className="form-input form-input--sm"
+                        />
+                      </label>
+                      <button
+                        onClick={() => commitEdit(feed)}
+                        className="btn btn-primary btn-sm"
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={() => setEditingId(null)}
+                        className="btn btn-outline btn-sm"
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="watchlist-discount-badge">
+                        ≥{feed.min_discount}%&nbsp;off
+                      </span>
+                      <button
+                        onClick={() => startEdit(feed)}
+                        className="btn btn-outline btn-sm"
+                      >
+                        Edit
+                      </button>
+                    </>
+                  )}
+                  <button
+                    onClick={() => removeFeed(feed)}
+                    className="btn btn-danger btn-sm"
+                    aria-label="Remove from watchlist"
+                  >
+                    Remove
+                  </button>
+                </div>
               </div>
-              {data.items.length === 0 && !isLoading && (
-                <p className="state-msg">No deals match your filters.</p>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* ──────────── Section B: Matched Deals ──────────── */}
+      {savedFeeds.length > 0 && (
+        <section className="feed-section">
+          <h2>Matched Deals</h2>
+          <p className="section-subtitle">
+            RSS deals from your feeds that meet your minimum discount thresholds.
+          </p>
+
+          {matchLoading && <p className="state-msg">Loading matches…</p>}
+          {matchError && (
+            <p className="state-msg state-msg--error">Could not load matched deals.</p>
+          )}
+          {matchData && (
+            <>
+              {matchData.items.length === 0 ? (
+                <p className="state-msg">No matched deals yet. Check back after the next pipeline run.</p>
+              ) : (
+                <>
+                  <p className="result-count">{matchData.total} matched deals</p>
+                  <div className="deal-grid">
+                    {matchData.items.map((deal) => (
+                      <DealCard key={deal.id} deal={deal} />
+                    ))}
+                  </div>
+                  <Pagination
+                    offset={matchOffset}
+                    limit={PAGE_SIZE}
+                    total={matchData.total}
+                    onPrev={() => setMatchOffset((o) => Math.max(0, o - PAGE_SIZE))}
+                    onNext={() => setMatchOffset((o) => o + PAGE_SIZE)}
+                  />
+                </>
               )}
-              <Pagination
-                offset={offset}
-                limit={PAGE_SIZE}
-                total={data.total}
-                onPrev={() => setOffset((o) => Math.max(0, o - PAGE_SIZE))}
-                onNext={() => setOffset((o) => o + PAGE_SIZE)}
-              />
             </>
           )}
-        </>
+        </section>
       )}
     </div>
   );

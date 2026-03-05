@@ -7,6 +7,7 @@ import { DealDetailPage } from './pages/DealDetailPage';
 import { FeedPage } from './pages/FeedPage';
 import { LoginPage } from './pages/LoginPage';
 import { PreferencesPage } from './pages/PreferencesPage';
+import { SearchPage } from './pages/SearchPage';
 import { TopDealsPage } from './pages/TopDealsPage';
 
 const queryClient = new QueryClient({
@@ -26,6 +27,7 @@ export function App() {
         <main className="main-content">
           <Routes>
             <Route path="/" element={<FeedPage />} />
+            <Route path="/search" element={<SearchPage />} />
             <Route path="/top" element={<TopDealsPage />} />
             <Route path="/deals/:id" element={<DealDetailPage />} />
             <Route path="/login" element={<LoginPage />} />

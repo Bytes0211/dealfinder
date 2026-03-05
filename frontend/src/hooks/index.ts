@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getDeal, listDeals, topDeals } from '../api/deals';
-import { getUserPreferences, updatePreferences } from '../api/users';
-import type { DealFilters, UserPreferencesUpdate } from '../api/types';
+import { postSearch } from '../api/search';
+import { deleteUser, getUserPreferences, getWatchlistMatches, updatePreferences } from '../api/users';
+import type { DealFilters, SearchRequest, UserPreferencesUpdate } from '../api/types';
 
 export function useDeals(filters: DealFilters = {}, options?: { enabled?: boolean }) {
   return useQuery({
@@ -42,5 +43,35 @@ export function useUpdatePreferences(userId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user', userId] });
     },
+  });
+}
+
+export function useSearch() {
+  return useMutation({
+    mutationFn: (body: SearchRequest) => postSearch(body),
+  });
+}
+
+export function useDeleteUser(userId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => deleteUser(userId),
+    onSuccess: () => {
+      queryClient.clear();
+    },
+  });
+}
+
+export function useWatchlistMatches(
+  userId: string,
+  limit = 20,
+  offset = 0,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: ['watchlist-matches', userId, limit, offset],
+    queryFn: () => getWatchlistMatches(userId, limit, offset),
+    enabled: enabled && !!userId,
+    staleTime: 30_000,
   });
 }

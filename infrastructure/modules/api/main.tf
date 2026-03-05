@@ -142,6 +142,12 @@ resource "aws_iam_role_policy" "api_inline" {
         Action   = ["secretsmanager:GetSecretValue"]
         Resource = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/${var.environment}/*"
       },
+      {
+        Sid      = "SnsSubscribe"
+        Effect   = "Allow"
+        Action   = ["sns:Subscribe", "sns:Unsubscribe", "sns:ListSubscriptionsByTopic"]
+        Resource = var.sns_topic_arn != "" ? var.sns_topic_arn : "arn:aws:sns:${var.aws_region}:${data.aws_caller_identity.current.account_id}:${var.project_name}-${var.environment}-*"
+      },
     ]
   })
 }
@@ -180,9 +186,10 @@ resource "aws_lambda_function" "api" {
 
   environment {
     variables = {
-      DB_HOST       = var.db_host
-      DB_NAME       = var.db_name
-      DB_SECRET_ARN = var.db_secret_arn
+      DB_HOST        = var.db_host
+      DB_NAME        = var.db_name
+      DB_SECRET_ARN  = var.db_secret_arn
+      TAVILY_API_KEY = var.tavily_api_key
     }
   }
 

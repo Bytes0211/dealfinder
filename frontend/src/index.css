@@ -40,7 +40,8 @@ a:hover { text-decoration: underline; }
   top: 0;
   z-index: 100;
 }
-.navbar-brand { font-weight: 700; font-size: 1.1rem; color: var(--c-text); }
+.navbar-brand { font-weight: 700; font-size: 1.1rem; color: var(--c-text); display: inline-flex; align-items: center; gap: .45rem; }
+.navbar-icon { height: 28px; width: auto; display: block; }
 .navbar-links { display: flex; gap: 1rem; flex: 1; }
 .navbar-links a { color: var(--c-muted); font-size: .9rem; }
 .navbar-links a.active, .navbar-links a:hover { color: var(--c-primary); }

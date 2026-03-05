@@ -2,6 +2,7 @@
 
 POST /users                      — create account
 PUT  /users/{id}/preferences     — update preferences (auth required)
+DELETE /users/{id}               — deactivate account (auth required)
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -137,13 +138,57 @@ class TestUpdateUserPreferences:
         )
         assert response.status_code == 404
 
-    def test_updates_preferred_categories(self, client, user) -> None:
-        """Preferred categories list should be updated when provided."""
+    def test_updates_phone_number(self, client, user) -> None:
+        """A valid E.164 phone number should be accepted and returned."""
         response = client.put(
             f"/api/v1/users/{user.id}/preferences",
-            json={"preferred_categories": ["Electronics", "Home & Kitchen"]},
+            json={"phone_number": "+12125551234"},
             headers={"X-Test-User-Id": str(user.id)},
         )
         assert response.status_code == 200
         body = response.json()
-        assert body["preferred_categories"] == ["Electronics", "Home & Kitchen"]
+        assert body["phone_number"] == "+12125551234"
+
+    def test_rejects_invalid_phone_number(self, client, user) -> None:
+        """A phone number that is not E.164 should return 422."""
+        response = client.put(
+            f"/api/v1/users/{user.id}/preferences",
+            json={"phone_number": "not-a-phone"},
+            headers={"X-Test-User-Id": str(user.id)},
+        )
+        assert response.status_code == 422
+
+
+class TestDeleteUser:
+    """Tests for DELETE /api/v1/users/{user_id}."""
+
+    def test_deactivates_own_account(self, client, user) -> None:
+        """Owner should be able to deactivate their own account."""
+        response = client.delete(
+            f"/api/v1/users/{user.id}",
+            headers={"X-Test-User-Id": str(user.id)},
+        )
+        assert response.status_code == 204
+
+    def test_returns_403_for_different_user(self, client, user) -> None:
+        """Attempting to deactivate another user's account should return 403."""
+        different_user_id = str(uuid4())
+        response = client.delete(
+            f"/api/v1/users/{user.id}",
+            headers={"X-Test-User-Id": different_user_id},
+        )
+        assert response.status_code == 403
+
+    def test_returns_401_without_auth(self, client, user) -> None:
+        """Missing auth header should return 401."""
+        response = client.delete(f"/api/v1/users/{user.id}")
+        assert response.status_code == 401
+
+    def test_returns_404_for_unknown_user(self, client) -> None:
+        """An unknown user_id should return 404 (after auth passes)."""
+        unknown_id = str(uuid4())
+        response = client.delete(
+            f"/api/v1/users/{unknown_id}",
+            headers={"X-Test-User-Id": unknown_id},
+        )
+        assert response.status_code == 404

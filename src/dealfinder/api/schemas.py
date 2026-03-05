@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 # ─────────────────────────────────────────────
@@ -88,15 +88,29 @@ class UserCreate(BaseModel):
 
 
 class SavedFeed(BaseModel):
-    """A single saved feed filter entry.
+    """A saved watchlist feed item from a Tavily search.
 
     Attributes:
-        category: Category or subcategory value to filter by.
-        status: Deal status filter (empty string means all statuses).
+        id: Unique identifier for this feed entry.
+        query: Original search query used to find this item.
+        title: Product title extracted by Bedrock.
+        url: Product URL.
+        current_price: Current price string at time of search (e.g. "$279.99").
+        min_discount: Minimum discount percentage to trigger a notification.
+        quality_score: Bedrock deal quality score 0–10.
+        quality_reason: Brief explanation of the quality score.
+        saved_at: ISO timestamp when the feed was saved.
     """
 
-    category: str
-    status: str = ""
+    id: str
+    query: str
+    title: str
+    url: str
+    current_price: Optional[str] = None
+    min_discount: int = 0
+    quality_score: Optional[float] = None
+    quality_reason: Optional[str] = None
+    saved_at: str
 
 
 class UserPreferencesUpdate(BaseModel):
@@ -104,15 +118,32 @@ class UserPreferencesUpdate(BaseModel):
 
     Attributes:
         notification_preferences: Channel-level opt-in/opt-out flags.
-        discount_threshold: Minimum discount to trigger a notification.
-        preferred_categories: Categories the user is interested in.
-        saved_feeds: User's saved feed filters for the Feed page UI.
+        saved_feeds: User's saved watchlist feed items.
+        phone_number: E.164-formatted phone number for SNS SMS notifications.
     """
 
     notification_preferences: Optional[dict] = None
-    discount_threshold: Optional[Decimal] = Field(None, ge=0, le=100)
-    preferred_categories: Optional[list[str]] = None
     saved_feeds: Optional[list[SavedFeed]] = None
+    phone_number: Optional[str] = None
+
+    @field_validator("phone_number")
+    @classmethod
+    def validate_phone_number(cls, v: Optional[str]) -> Optional[str]:
+        """Validate E.164 phone number format.
+
+        Args:
+            v: Phone number string or None.
+
+        Returns:
+            Validated phone number string.
+
+        Raises:
+            ValueError: If the phone number does not match E.164 format.
+        """
+        import re
+        if v is not None and not re.match(r"^\+[1-9]\d{1,14}$", v):
+            raise ValueError("Phone number must be in E.164 format (e.g. +12125551234)")
+        return v
 
 
 class UserResponse(BaseModel):
@@ -124,8 +155,7 @@ class UserResponse(BaseModel):
         username: Username.
         full_name: Display name.
         is_active: Whether the account is active.
-        discount_threshold: User's personal notification threshold.
-        preferred_categories: List of preferred categories.
+        phone_number: E.164 phone number for SNS SMS notifications.
         notification_preferences: JSONB preferences dict (includes saved_feeds).
     """
 
@@ -134,12 +164,62 @@ class UserResponse(BaseModel):
     username: str
     full_name: Optional[str] = None
     is_active: bool
-    discount_threshold: Decimal
-    preferred_categories: Optional[list] = None
+    phone_number: Optional[str] = None
     notification_preferences: Optional[dict] = None
-    # pushover_user_key removed — notifications now via SNS topic subscription
 
     model_config = {"from_attributes": True}
+
+
+# ─────────────────────────────────────────────
+# Search schemas
+# ─────────────────────────────────────────────
+
+
+class SearchRequest(BaseModel):
+    """Request body for the Tavily + Bedrock deal search.
+
+    Attributes:
+        query: Free-text product search query.
+        max_results: Maximum number of results to return (1–20).
+    """
+
+    query: str = Field(..., min_length=1, max_length=500)
+    max_results: int = Field(10, ge=1, le=20)
+
+
+class SearchResult(BaseModel):
+    """A single search result enriched by Bedrock.
+
+    Attributes:
+        title: Cleaned product title.
+        url: Product URL.
+        current_price: Current price string (e.g. "$279.99") or None.
+        quality_score: Bedrock deal quality score 0–10.
+        quality_reason: Brief explanation of the quality score (max 15 words).
+    """
+
+    title: str
+    url: str
+    current_price: Optional[str] = None
+    quality_score: Optional[float] = None
+    quality_reason: Optional[str] = None
+
+
+class SearchResponse(BaseModel):
+    """Response from the deal search endpoint.
+
+    Attributes:
+        query: The original search query.
+        results: List of enriched search results.
+    """
+
+    query: str
+    results: list[SearchResult]
+
+
+# ─────────────────────────────────────────────
+# Preferences update response
+# ─────────────────────────────────────────────
 
 
 class PreferencesUpdateResponse(UserResponse):

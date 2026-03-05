@@ -7,9 +7,13 @@ export function NavBar() {
 
   return (
     <nav className="navbar">
-      <Link to="/" className="navbar-brand">🔍 Deal Finder</Link>
+      <Link to="/" className="navbar-brand">
+        <img src="/dealfinder_icon.png" alt="DealFinder" className="navbar-icon" />
+        Deal Finder
+      </Link>
       <div className="navbar-links">
         <Link to="/" className={pathname === '/' ? 'active' : ''}>Feed</Link>
+        <Link to="/search" className={pathname === '/search' ? 'active' : ''}>Search</Link>
         <Link to="/top" className={pathname === '/top' ? 'active' : ''}>Top Deals</Link>
         {authed && (
           <Link to="/preferences" className={pathname === '/preferences' ? 'active' : ''}>

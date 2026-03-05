@@ -1,7 +1,8 @@
-"""AWS Bedrock client for deal price estimation using Claude.
+"""AWS Bedrock client for deal price estimation and search enrichment using Claude.
 
-Provides price estimation for deals by invoking AWS Bedrock with
-structured prompts and parsing structured JSON responses from Claude.
+Provides:
+- Price estimation for RSS-discovered deals (BedrockPriceEstimator)
+- Search result enrichment via Tavily + Bedrock pipeline (BedrockSearchExtractor)
 """
 
 import json
@@ -9,11 +10,15 @@ import logging
 import time
 from dataclasses import dataclass
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 import boto3
 from botocore.exceptions import ClientError
 
 from dealfinder.agents.config import AgentConfig
+
+if TYPE_CHECKING:
+    from dealfinder.api.schemas import SearchResult
 
 logger = logging.getLogger(__name__)
 
@@ -251,3 +256,152 @@ class BedrockPriceEstimator:
             model_id=self.config.bedrock_model_id,
             inference_time_ms=inference_ms,
         )
+
+
+class BedrockSearchExtractor:
+    """Enriches Tavily web search results using Claude via AWS Bedrock.
+
+    Takes raw Tavily result snippets and uses Claude to extract clean product
+    data (title, URL, current price) and assign a deal quality score (0–10)
+    with a brief reasoning explanation. All fields are extracted in a single
+    Bedrock call to minimise latency and cost.
+
+    This is the agentic layer of the search pipeline — Claude applies market
+    knowledge to judge deal quality, making the scores extensible to richer
+    reasoning (price comparison, trend analysis) in future phases.
+
+    Example:
+        extractor = BedrockSearchExtractor()
+        results = extractor.extract(tavily_results)
+        for r in results:
+            print(r.title, r.current_price, r.quality_score)
+    """
+
+    def __init__(self, config: AgentConfig | None = None) -> None:
+        """Initialise the search extractor.
+
+        Args:
+            config: Agent configuration. Loaded from environment if not provided.
+        """
+        self.config = config or AgentConfig()
+        self._client = None
+
+    @property
+    def client(self):
+        """Lazily initialise the Bedrock runtime boto3 client."""
+        if self._client is None:
+            self._client = boto3.client(
+                "bedrock-runtime",
+                region_name=self.config.bedrock_region,
+            )
+        return self._client
+
+    def _build_extraction_prompt(self, results: list[dict]) -> str:
+        """Build a structured extraction + quality scoring prompt for Claude.
+
+        Args:
+            results: List of raw Tavily result dicts with title, url, content keys.
+
+        Returns:
+            Formatted prompt string ready to be sent to Claude.
+        """
+        condensed = [
+            {
+                "title": _sanitize(r.get("title", ""), max_len=200),
+                "url": r.get("url", ""),
+                "content": _sanitize(r.get("content", ""), max_len=400),
+            }
+            for r in results
+        ]
+        results_json = json.dumps(condensed, indent=2)
+        return (
+            "You are a deal analysis assistant. Given these web search result snippets, "
+            "extract and score each result as a potential product deal.\n\n"
+            "For each result return:\n"
+            "- title: Clean product name (remove store names and marketing filler)\n"
+            "- url: The product URL exactly as provided\n"
+            "- current_price: Current sale price as a string (e.g. \"$279.99\") or null if not found\n"
+            "- quality_score: Float 0.0–10.0 rating the deal quality\n"
+            "  (10 = exceptional value vs typical retail, 0 = poor value or no deal)\n"
+            "  Base this on: price vs known typical retail, brand reputation, discount signals\n"
+            "- quality_reason: Max 15-word explanation of the score\n\n"
+            f"Search results:\n{results_json}\n\n"
+            "Respond with ONLY a JSON array — no markdown, no explanation:\n"
+            '[{"title": "...", "url": "...", "current_price": "...", '
+            '"quality_score": 7.5, "quality_reason": "..."}]'
+        )
+
+    def _parse_extraction_response(self, response_text: str, original: list[dict]) -> list:
+        """Parse Claude's JSON array response into SearchResult-compatible dicts.
+
+        Falls back to minimal results (title/url only) if parsing fails.
+
+        Args:
+            response_text: Raw Claude output.
+            original: Original Tavily results used as fallback source for title/url.
+
+        Returns:
+            List of dicts with title, url, current_price, quality_score, quality_reason keys.
+        """
+        start = response_text.find("[")
+        if start != -1:
+            try:
+                data, _ = json.JSONDecoder().raw_decode(response_text, start)
+                if isinstance(data, list):
+                    return data
+            except (json.JSONDecodeError, ValueError):
+                pass
+        logger.warning("BedrockSearchExtractor: failed to parse Claude response; using fallbacks")
+        return [
+            {"title": r.get("title", ""), "url": r.get("url", ""),
+             "current_price": None, "quality_score": None, "quality_reason": None}
+            for r in original
+        ]
+
+    def extract(self, results: list[dict]) -> list[dict]:
+        """Extract and score product data from Tavily search results via Claude.
+
+        Args:
+            results: List of raw Tavily result dicts (title, url, content).
+
+        Returns:
+            List of enriched result dicts with title, url, current_price,
+            quality_score, and quality_reason fields.
+
+        Raises:
+            ClientError: If the Bedrock API call fails.
+        """
+        if not results:
+            return []
+
+        prompt = self._build_extraction_prompt(results)
+        body = json.dumps({
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 1024,
+            "temperature": 0.1,
+            "messages": [{"role": "user", "content": prompt}],
+        })
+
+        try:
+            response = self.client.invoke_model(
+                modelId=self.config.bedrock_model_id,
+                contentType="application/json",
+                accept="application/json",
+                body=body,
+            )
+        except ClientError as e:
+            code = e.response["Error"]["Code"]
+            msg = e.response["Error"]["Message"]
+            logger.error(f"BedrockSearchExtractor API error [{code}]: {msg}")
+            raise
+
+        response_body = json.loads(response["body"].read())
+        content_blocks = response_body.get("content", [])
+        if not content_blocks or content_blocks[0].get("type") != "text":
+            logger.warning("BedrockSearchExtractor: unexpected response structure")
+            return self._parse_extraction_response("", results)
+
+        response_text = content_blocks[0]["text"]
+        extracted = self._parse_extraction_response(response_text, results)
+        logger.info(f"BedrockSearchExtractor: enriched {len(extracted)} results")
+        return extracted

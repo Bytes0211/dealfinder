@@ -31,6 +31,7 @@ class AgentConfig(BaseSettings):
     bedrock_region: str = "us-east-1"
     bedrock_model_id: str = "anthropic.claude-3-sonnet-20240229-v1:0"
     notification_queue_url: str = ""
+    tavily_api_key: str = ""
 
     # Messenger Agent fields
     ses_sender_email: str = ""
