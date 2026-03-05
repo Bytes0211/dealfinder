@@ -150,6 +150,15 @@ class MessengerAgent:
             )
         return self._dynamodb
 
+    @property
+    def bedrock_client(self) -> Any:
+        """Lazily initialise and cache the Bedrock runtime client."""
+        if self._bedrock_client is None:
+            self._bedrock_client = boto3.client(
+                "bedrock-runtime", region_name=self.config.bedrock_region
+            )
+        return self._bedrock_client
+
     def _is_duplicate(self, deal_id: UUID) -> bool:
         """Check DynamoDB deduplication table for a recent notification.
 
@@ -190,9 +199,7 @@ class MessengerAgent:
             Tuple of (title, message).
         """
         try:
-            client = boto3.client(
-                "bedrock-runtime", region_name=self.config.bedrock_region
-            )
+            client = self.bedrock_client
             prompt = _build_notification_prompt(deal)
             body = json.dumps({
                 "anthropic_version": "bedrock-2023-05-31",
@@ -243,6 +250,7 @@ class MessengerAgent:
             users = await user_repo.find_active_users()
 
         any_sent = False
+        loop = asyncio.get_running_loop()
 
         for user in users:
             prefs = user.notification_preferences or {}
@@ -261,10 +269,8 @@ class MessengerAgent:
                     notif = await nr.create(notif)
 
                 try:
-                    receipt = self._pushover.send(
-                        user_key=user.pushover_user_key,
-                        title=title,
-                        message=message,
+                    receipt = await loop.run_in_executor(
+                        None, self._pushover.send, user.pushover_user_key, title, message
                     )
                     async with get_async_session() as session:
                         nr = NotificationRepository(session)
@@ -290,10 +296,8 @@ class MessengerAgent:
                     notif_email = await nr.create(notif_email)
 
                 try:
-                    msg_id = self._ses.send_email(
-                        to_address=user.email,
-                        subject=title,
-                        body_text=message,
+                    msg_id = await loop.run_in_executor(
+                        None, self._ses.send_email, user.email, title, message
                     )
                     async with get_async_session() as session:
                         nr = NotificationRepository(session)
@@ -342,7 +346,8 @@ class MessengerAgent:
                 "channels_attempted": 0,
             }
 
-        title, message = self._craft_message(deal)
+        loop = asyncio.get_running_loop()
+        title, message = await loop.run_in_executor(None, self._craft_message, deal)
 
         any_sent = await self._dispatch_to_user(deal, title, message)
 

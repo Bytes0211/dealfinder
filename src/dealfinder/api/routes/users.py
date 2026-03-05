@@ -5,12 +5,13 @@ Endpoints:
     PUT  /users/{id}/preferences — update notification preferences
 """
 
-import hashlib
 import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
+
+import bcrypt
 
 from dealfinder.api.deps import get_current_user_id, get_db
 from dealfinder.api.schemas import UserCreate, UserPreferencesUpdate, UserResponse
@@ -29,10 +30,6 @@ async def create_user(
     db: AsyncSession = Depends(get_db),
 ) -> UserResponse:
     """Create a new user account.
-
-    The password is stored as a SHA-256 hex digest.  For production
-    a proper password hashing library (e.g. bcrypt) should be used;
-    this implementation is intentionally simple for the prototype phase.
 
     Args:
         body: User creation request.
@@ -57,7 +54,7 @@ async def create_user(
             detail="Username already taken",
         )
 
-    hashed = hashlib.sha256(body.password.encode()).hexdigest()
+    hashed = bcrypt.hashpw(body.password.encode(), bcrypt.gensalt()).decode()
     user = User(
         email=body.email,
         username=body.username,
