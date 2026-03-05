@@ -2,8 +2,15 @@
 
 This module provides async database connectivity using SQLAlchemy
 with connection pooling optimized for Aurora PostgreSQL.
+
+When running on Lambda, the DB password is stored in AWS Secrets Manager.
+Set ``DB_SECRET_ARN`` in the Lambda environment and leave ``DB_PASSWORD``
+unset; ``_resolve_db_config()`` will fetch and inject the credentials at
+cold-start time using the Lambda execution role.
 """
 
+import json
+import logging
 import os
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Optional
@@ -16,6 +23,8 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class DatabaseConfig(BaseSettings):
@@ -82,6 +91,43 @@ class DatabaseConfig(BaseSettings):
         return base_url
 
 
+def _resolve_db_config() -> "DatabaseConfig":
+    """Build a DatabaseConfig, fetching credentials from Secrets Manager if needed.
+
+    When ``DB_SECRET_ARN`` is set and ``DB_PASSWORD`` is empty, the secret is
+    fetched synchronously via boto3 (safe at cold-start / engine-init time).
+    Aurora secrets are JSON with keys ``username`` and ``password``; both are
+    merged into the returned config.
+
+    Returns:
+        Fully populated DatabaseConfig ready for engine creation.
+    """
+    config = DatabaseConfig()
+    secret_arn = os.environ.get("DB_SECRET_ARN", "")
+
+    if secret_arn and not config.password.get_secret_value():
+        try:
+            import boto3  # local import — only needed on Lambda
+
+            client = boto3.client("secretsmanager", region_name=os.environ.get("AWS_DEFAULT_REGION", "us-east-1"))
+            response = client.get_secret_value(SecretId=secret_arn)
+            secret = json.loads(response["SecretString"])
+
+            # Aurora secrets contain both username and password
+            if "password" in secret:
+                config = config.model_copy(
+                    update={
+                        "password": SecretStr(secret["password"]),
+                        "user": secret.get("username", config.user),
+                    }
+                )
+            logger.info("DB credentials loaded from Secrets Manager")
+        except Exception:
+            logger.exception("Failed to fetch DB secret from Secrets Manager (ARN: %s)", secret_arn)
+
+    return config
+
+
 # Global instances
 _engine: Optional[AsyncEngine] = None
 _session_factory: Optional[async_sessionmaker[AsyncSession]] = None
@@ -100,7 +146,7 @@ def get_async_engine(config: Optional[DatabaseConfig] = None) -> AsyncEngine:
 
     if _engine is None:
         if config is None:
-            config = DatabaseConfig()
+            config = _resolve_db_config()
 
         _engine = create_async_engine(
             config.async_url,
