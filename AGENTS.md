@@ -6,7 +6,7 @@ This file provides guidance to AI assistants (Claude Code, Warp, etc.) when work
 
 Deal Finder is an AI-powered deal hunting system that discovers deals via RSS feeds, estimates prices using AWS Bedrock (Claude), and sends notifications for high-value opportunities. It's a serverless system on AWS, built by a solo developer.
 
-**Status:** Phase 4 of 5 complete. Infrastructure, data layer, core pipeline, notifications, and REST API are built. Next: integration tests + production deploy (Phase 5).
+**Status:** Phase 4 of 5 complete. Infrastructure, data layer, core pipeline, notifications, and REST API are built. Next: production deploy (Phase 5). React frontend added as Phase 6 (planned).
 
 ## Architecture
 
@@ -20,7 +20,7 @@ RSS Feeds → Lambda (Scanner) → Step Functions → Lambda (Evaluator) → SNS
 
 **Stack:** Python 3.12, FastAPI, SQLAlchemy (async), Lambda, Step Functions, SQS/SNS, Aurora PostgreSQL, OpenSearch, Bedrock, Terraform, GitHub Actions
 
-**Not in scope (intentionally removed):** Kafka/MSK, Spark/EMR, ECS Fargate, SageMaker, Apache APISIX, React frontend, Prometheus/Grafana, ElastiCache. See PRODUCTION_PLAN.md "Future Enhancements" for triggers to re-add.
+**Not in scope:** Kafka/MSK, Spark/EMR, ECS Fargate, SageMaker, Apache APISIX, Prometheus/Grafana, ElastiCache. See PRODUCTION_PLAN.md "Future Enhancements" for triggers to re-add. **Phase 6 (planned):** React + Vite + TypeScript frontend (S3/CloudFront static site).
 
 ### Agent Architecture
 - **ScannerAgent**: Scrapes RSS feeds for deals (Lambda)
@@ -89,15 +89,21 @@ tests/
 │   ├── data/test_repository.py
 │   └── search/test_*.py
 └── infrastructure/         # Terraform resource validation tests
+docs/
+├── cost_management.md      # AWS cost breakdown and optimization guide
+└── USER_GUIDE.md           # End-user API guide
 infrastructure/
-├── environments/dev/       # Terraform dev environment
+├── environments/
+│   ├── dev/                # Terraform dev environment
+│   └── prod/               # Terraform prod environment (Phase 5)
 └── modules/
     ├── networking/         # VPC, subnets, VPC endpoints
     ├── data/               # S3, DynamoDB, Aurora, OpenSearch
     ├── monitoring/         # CloudWatch logs, alarms, dashboard
     ├── pipeline/           # SQS, Lambda, Step Functions, EventBridge, IAM
     ├── notifications/      # SNS topic, Messenger Lambda, SQS ESM (Phase 4)
-    └── api/                # API Lambda, API GW HTTP API, Cognito (Phase 4)
+    ├── api/                # API Lambda, API GW HTTP API, Cognito (Phase 4)
+    └── frontend/           # S3 + CloudFront static site (Phase 6)
 ```
 
 ## Code Conventions
@@ -151,7 +157,9 @@ infrastructure/
 ```
 infrastructure/
 ├── bootstrap.sh              # One-time backend setup (S3 + DynamoDB)
-├── environments/dev/         # Dev environment config
+├── environments/
+│   ├── dev/                  # Dev environment config
+│   └── prod/                 # Prod environment config (Phase 5)
 └── modules/
     ├── networking/           # VPC, subnets, VPC endpoints
     ├── data/                 # S3, DynamoDB, Aurora, OpenSearch
@@ -159,7 +167,8 @@ infrastructure/
     ├── pipeline/             # SQS queues+DLQs, Lambda, Step Functions,
     │                         # EventBridge schedule, IAM roles
     ├── notifications/        # SNS, Messenger Lambda, SQS ESM, IAM (Phase 4)
-    └── api/                  # API Lambda, API GW HTTP API v2, Cognito (Phase 4)
+    ├── api/                  # API Lambda, API GW HTTP API v2, Cognito (Phase 4)
+    └── frontend/             # S3 + CloudFront static site, OAC (Phase 6)
 ```
 
 ### Key Principles
@@ -190,7 +199,7 @@ Feature flags keep idle costs at ~$4-10/month:
 
 - Conventional commits: `type(scope): description`
 - Types: feat, fix, docs, refactor, test, chore
-- Scopes: db, search, agent, api, terraform, lambda, step-functions
+- Scopes: db, search, agent, api, terraform, lambda, step-functions, frontend
 - Keep first line under 72 characters, imperative mood
 - Only commit when explicitly asked
 
@@ -218,7 +227,7 @@ Feature flags keep idle costs at ~$4-10/month:
 1. **Serverless-first** — Lambda + Step Functions, not containers. Minimizes ops overhead for solo dev.
 2. **SQS/SNS over Kafka** — sufficient at current scale (100-1000 deals/hour), ~$500/mo cheaper.
 3. **Bedrock over SageMaker** — single service for all LLM needs, no endpoints to manage.
-4. **API-first, no frontend** — REST API via Lambda + API Gateway + Mangum. UI deferred until users need it.
+4. **API-first** — REST API via Lambda + API Gateway + Mangum. React frontend added as Phase 6 (S3/CloudFront static site + Cognito Hosted UI).
 5. **Cost target: $200-500/month** — use feature flags to keep costs down.
 
 ### Performance Targets
@@ -253,10 +262,12 @@ Feature flags keep idle costs at ~$4-10/month:
 | `infrastructure/modules/pipeline/` | Pipeline Terraform module |
 | `infrastructure/modules/notifications/` | Notifications Terraform module |
 | `infrastructure/modules/api/` | API + Cognito Terraform module |
+| `docs/cost_management.md` | AWS cost breakdown and optimization guide |
+| `docs/USER_GUIDE.md` | End-user API and notification guide |
 
 ## What NOT to Do
 
-- Don't add Kafka, Spark, ECS, SageMaker, or React — these were intentionally removed from scope.
+- Don't add Kafka, Spark, ECS, or SageMaker — these were intentionally removed from scope. (React frontend is Phase 6 — planned, not yet built.)
 - Don't use synchronous database calls — everything is async.
 - Don't call blocking I/O (boto3, feedparser, requests) directly inside `async def` — wrap in `asyncio.get_running_loop().run_in_executor(None, ...)` to keep the event loop responsive.
 - Don't bypass the repository layer with raw SQL or direct session queries in business logic.

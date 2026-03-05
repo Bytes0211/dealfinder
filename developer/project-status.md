@@ -1,9 +1,9 @@
 # Deal Finder - Project Status & Timeline
 
 **Project Start:** January 21, 2026
-**Last Update:** March 4, 2026
-**Project Duration:** 10 weeks (revised from 18 weeks)
-**Current Status:** Phase 4 Complete | 72% Complete | Ready for Phase 5
+**Last Update:** March 5, 2026
+**Project Duration:** 10 weeks (revised from 18 weeks) + Phase 6 (frontend, ~2 weeks)
+**Current Status:** Phase 4 Complete | 4 of 6 phases complete | Ready for Phase 5
 
 ---
 
@@ -13,8 +13,8 @@ Deal Finder is an AI-powered deal hunting autonomous agent system being transfor
 
 **Scope Revision (Feb 18, 2026):** Reduced from 8 phases / 18 weeks to 5 phases / 10 weeks. Removed Kafka, Spark, ECS, SageMaker, APISIX, React frontend, Prometheus/Grafana. Replaced with serverless equivalents (SQS/SNS, Lambda, Bedrock, CloudWatch). Target cost reduced from $1,750-2,900/month to $200-500/month. See [PRODUCTION_PLAN.md](../PRODUCTION_PLAN.md) for full details.
 
-**Current Milestone:** Phase 3 - Core Pipeline COMPLETE
-**Next Milestone:** Phase 4 - Notifications + API
+**Current Milestone:** Phase 4 - Notifications + API COMPLETE
+**Next Milestone:** Phase 5 - Polish + Deploy
 
 ---
 
@@ -52,9 +52,18 @@ Deal Finder is an AI-powered deal hunting autonomous agent system being transfor
 - Task 30-31: ░░░░░░░░ [PENDING] Integration tests (end-to-end)
 - Task 32: ░░░░░░░░ [PENDING] Terraform production environment
 - Task 33: ░░░░░░░░ [PENDING] CloudWatch dashboard + alarms
-- Task 34-35: ░░░░░░░░ [PENDING] Production deploy + validation
+- Task 34: ░░░░░░░░ [PENDING] GitHub Actions CI/CD
+- Task 35: ░░░░░░░░ [PENDING] Production deploy + validation
 
-**Legend:** ████ Completed ▓▓▓▓ In Progress ░░░░ Pending
+### Phase 6 (Weeks 11-12): React Frontend
+- Task 36: ░░░░░░░░ [PENDING] Frontend scaffold (React + Vite + TypeScript)
+- Task 37: ░░░░░░░░ [PENDING] Pages + typed API client wrappers
+- Task 38: ░░░░░░░░ [PENDING] Cognito Hosted UI auth flow
+- Task 39: ░░░░░░░░ [PENDING] Terraform frontend module (S3 + CloudFront)
+- Task 40: ░░░░░░░░ [PENDING] GitHub Actions frontend deploy workflow
+- Task 41: ░░░░░░░░ [PENDING] Tests + validation + docs update
+
+**Legend:** ████ Completed ▓▓▓▓ In Progress ░░░░ Pending
 
 ---
 
@@ -195,7 +204,8 @@ Deal Finder is an AI-powered deal hunting autonomous agent system being transfor
 |------|-------|------|--------|--------------|
 | Integration tests (end-to-end pipeline) | scotton | 2.0 | 📝 PENDING | Phase 4 |
 | Terraform production environment | scotton | 1.0 | 📝 PENDING | Phase 4 |
-| CloudWatch dashboard + alarm config | scotton | 1.0 | 📝 PENDING | Phase 4 |
+| CloudWatch dashboard + alarm config | scotton | 0.5 | 📝 PENDING | Phase 4 |
+| GitHub Actions CI/CD (ci.yml, cd.yml) | scotton | 0.5 | 📝 PENDING | Phase 4 |
 | Production deploy + validation | scotton | 1.0 | 📝 PENDING | All above |
 
 **Deliverables:**
@@ -213,15 +223,47 @@ Deal Finder is an AI-powered deal hunting autonomous agent system being transfor
 
 ---
 
+### Phase 6: React Frontend (Weeks 11-12) 📝 PLANNED
+
+**Duration:** ~7 days
+**Status:** 0% Complete ⏸️
+
+| Task | Owner | Days | Status | Dependencies |
+|------|-------|------|--------|--------------|
+| Frontend scaffold (React + Vite + TypeScript) | scotton | 1.0 | 📝 PENDING | Phase 5 |
+| Pages + typed API client wrappers | scotton | 2.0 | 📝 PENDING | Frontend scaffold |
+| Cognito Hosted UI auth flow | scotton | 1.0 | 📝 PENDING | Pages |
+| Terraform frontend module (S3 + CloudFront) | scotton | 1.0 | 📝 PENDING | Phase 5 infra |
+| GitHub Actions frontend deploy workflow | scotton | 0.5 | 📝 PENDING | Terraform module |
+| Tests + validation + docs update | scotton | 1.5 | 📝 PENDING | All above |
+
+**Deliverables:**
+- `frontend/` React + Vite + TypeScript SPA
+- Pages: deal feed, top deals, deal detail, preferences, login/callback
+- Typed API client wrappers for all existing endpoints
+- Cognito Hosted UI token flow
+- Terraform `modules/frontend/` (S3 private bucket + CloudFront OAC)
+- GitHub Actions `frontend.yml` deploy workflow (build → S3 sync → CloudFront invalidation)
+
+**Success Criteria:**
+- User can browse and filter deals in a browser
+- User can log in via Cognito Hosted UI
+- User can update notification preferences
+- CloudFront serves the SPA over HTTPS
+- All TypeScript type checks pass; lint clean
+
+---
+
 ## Overall Project Status
 
 ### Completion Metrics
-- **Overall Progress:** 72% (18 of 25 tasks complete)
+- **Overall Progress:** ~58% (18 of 31 tasks complete)
 - **Phase 1:** 80% complete (CI/CD not yet set up)
 - **Phase 2:** 100% complete ✅
 - **Phase 3:** 100% complete ✅
 - **Phase 4:** 100% complete ✅
 - **Phase 5:** 0% complete
+- **Phase 6:** 0% complete (planned)
 
 ### Key Milestones
 
@@ -231,7 +273,8 @@ Deal Finder is an AI-powered deal hunting autonomous agent system being transfor
 | ✅ Data layer operational (Phase 2) | Feb 17, 2026 | ACHIEVED |
 | ✅ Core pipeline implemented (Phase 3) | Mar 4, 2026 | ACHIEVED |
 | ✅ Notifications + API live (Phase 4) | Mar 18, 2026 | ACHIEVED |
-| ⏸️ Production deployed (Phase 5) | TBD | PENDING |
+|| ⏸️ Production deployed (Phase 5) | TBD | PENDING |
+|| ⏸️ React frontend live (Phase 6) | TBD | PLANNED |
 
 ### Risk Register
 
@@ -248,23 +291,24 @@ Deal Finder is an AI-powered deal hunting autonomous agent system being transfor
 
 ## Critical Path Analysis
 
-**Critical Path:** Phase 1 → Phase 2 → Phase 3 → Phase 4 → Phase 5
+**Critical Path:** Phase 1 → Phase 2 → Phase 3 → Phase 4 → Phase 5 → Phase 6
 
-**Current Bottleneck:** None (Phase 3 complete, ready for Phase 4)
+**Current Bottleneck:** None (Phase 4 complete, ready for Phase 5)
 
 **Dependencies:**
 1. Phase 3 depends on: Phase 2 data layer ✅ COMPLETE
 2. Phase 4 depends on: Phase 3 pipeline ✅ COMPLETE
-3. Phase 5 depends on: Phase 4 notifications + API
+3. Phase 5 depends on: Phase 4 notifications + API ✅ COMPLETE
+4. Phase 6 depends on: Phase 5 production deploy (CloudFront needs API Gateway URL)
 
 ---
 
 ## Resource Allocation
 
-| Resource | Phase 1 | Phase 2 | Phase 3 | Phase 4 | Phase 5 | Total |
-|----------|---------|---------|---------|---------|---------|-------|
-| scotton (days) | 5 | 10 | 11 | 10 | 5 | 41 |
-| AWS Costs | $10 | $10 | $50 | $100 | $200 | $370 |
+| Resource | Phase 1 | Phase 2 | Phase 3 | Phase 4 | Phase 5 | Phase 6 | Total |
+|----------|---------|---------|---------|---------|---------|---------|-------|
+| scotton (days) | 5 | 10 | 11 | 10 | 5 | 7 | 48 |
+| AWS Costs | $10 | $10 | $50 | $100 | $200 | $0 | $370 |
 
 **Note:** Single developer (scotton) on project.
 
@@ -302,19 +346,22 @@ Deal Finder is an AI-powered deal hunting autonomous agent system being transfor
 
 ## Next Actions (Priority Order)
 
-### Immediate
-1. ⏸️ Set up GitHub Actions CI/CD (`.github/workflows/ci.yml`, `cd.yml`)
-2. ✅ Phase 3 + PR review fixes committed to `dev`
-3. ⏸️ Tag release v0.3.0-phase3
+### Immediate (Phase 5 — Production Deploy)
+1. ⏸️ Create Terraform prod environment (`infrastructure/environments/prod/`)
+2. ⏸️ Enable feature flags: `enable_aurora=true`, `enable_nat_gateway=true`
+3. ⏸️ Set up GitHub Actions CI/CD (`.github/workflows/ci.yml`, `cd.yml`)
+4. ⏸️ Configure GitHub Actions secrets: `AWS_ROLE_ARN`, `AWS_REGION`, notification API keys
+5. ⏸️ Run `terraform apply` in prod and push to `main` to trigger CD
+6. ⏸️ Validate: Step Functions console, API health check, Pushover test notification
+7. ⏸️ Monitor 48-hour production run — confirm <$500/month cost
 
-### Phase 4 (Next)
-1. Implement Messenger Agent Lambda (Bedrock message crafting)
-2. Pushover integration (port from prototype)
-3. SES email setup and templates
-4. SNS topic + fan-out to channels
-5. FastAPI REST API (deals, users, preferences)
-6. API Gateway + Mangum deployment
-7. Cognito user pool + JWT auth
+### Phase 6 (React Frontend — after Phase 5)
+1. Scaffold `frontend/` (React + Vite + TypeScript)
+2. Implement pages and typed API client wrappers
+3. Cognito Hosted UI auth flow
+4. Terraform `modules/frontend/` (S3 + CloudFront)
+5. GitHub Actions `frontend.yml` deploy workflow
+6. Type check, lint, tests + smoke test
 
 ---
 
@@ -323,12 +370,12 @@ Deal Finder is an AI-powered deal hunting autonomous agent system being transfor
 ### Technical KPIs
 - ✅ Infrastructure deployed: 47 resources
 - ✅ Terraform state managed remotely
-- ⏸️ CI/CD pipeline (`.github/workflows/` not yet created)
+- ⏸️ CI/CD pipeline (`.github/workflows/` — Phase 5)
 - ✅ Monitoring baseline established
 - ✅ Database models and repository layer complete
-- ⏸️ Pipeline reliability: >95% (pending real-feed integration test)
-- ⏸️ API latency: <1s P95 (pending Phase 4)
-- ⏸️ Notification delivery: <2 min (pending Phase 4)
+- ⏸️ Pipeline reliability: >95% (pending Phase 5 production deploy)
+- ⏸️ API latency: <1s P95 (pending Phase 5 production deploy)
+- ⏸️ Notification delivery: <2 min (pending Phase 5 production deploy)
 
 ### Cost Metrics
 - ✅ Current cost: $4-10/month (Phase 1-2)
@@ -348,7 +395,8 @@ Deal Finder is an AI-powered deal hunting autonomous agent system being transfor
 | Feb 18, 2026 | Removed ECS Fargate for API | Lambda + API Gateway (serverless) |
 | Feb 18, 2026 | Removed Apache APISIX | API Gateway sufficient |
 | Feb 18, 2026 | Removed SageMaker | Bedrock (Claude) handles all LLM needs |
-| Feb 18, 2026 | Removed React frontend | API-first; add UI when users need it |
+| Feb 18, 2026 | Removed React frontend from Phases 1-5 | API-first; deferred to Phase 6 |
+| Mar 5, 2026 | Added Phase 6 (React frontend) | Cognito + API Gateway already in place; user demand |
 | Feb 18, 2026 | Removed Prometheus/Grafana | CloudWatch sufficient for serverless |
 | Feb 18, 2026 | Removed ElastiCache (Redis) | DynamoDB for caching |
 | Feb 18, 2026 | Cost target: $200-500/mo | Down from $1,750-2,900/mo |
@@ -369,6 +417,7 @@ Deal Finder is an AI-powered deal hunting autonomous agent system being transfor
 | 3.1 | Mar 4, 2026 | scotton/Warp | **Project audit** - Fixed docs vs reality: rewrote README, fixed broken tests (187 pass/41 skip/0 fail), removed stale CI/CD tests, cleaned pyproject.toml (removed redis, separated dev deps, added aiosqlite), deleted empty emr/msk dirs, corrected CI/CD status to not-started, updated AGENTS.md repo class count |
 | 4.0 | Mar 4, 2026 | scotton/Warp | **Phase 3 complete** - ScannerAgent, BedrockPriceEstimator, EvaluatorAgent Lambdas; Terraform pipeline module (SQS, Lambda, Step Functions, EventBridge); 37 new unit tests (224 passing total) |
 | 4.1 | Mar 4, 2026 | scotton/Warp | **PR review fixes** - EventBridge IAM principal, SHA-256 dedup fallback, feedparser + Bedrock run_in_executor, _MODEL_NAME removed, @compiles consolidated, ORM session safety, Step Functions Fail states, AsyncSession type hint |
+| 5.0 | Mar 5, 2026 | scotton/Warp | **Phase 6 planning** - React frontend (Phase 6) added to scope; docs/cost_management.md created; branch sync (dev = main = origin/main = origin/dev) |
 
 ---
 
@@ -382,5 +431,5 @@ Deal Finder is an AI-powered deal hunting autonomous agent system being transfor
 
 ---
 
-**Last Updated:** March 4, 2026
-**Status:** Phase 3 Complete — Ready for Phase 4 (CI/CD still needed)
+**Last Updated:** March 5, 2026
+**Status:** Phase 4 Complete — Ready for Phase 5 (production deploy) | Phase 6 (React frontend) planned
