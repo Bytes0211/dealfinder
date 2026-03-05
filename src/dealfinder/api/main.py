@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from mangum import Mangum
 
 from dealfinder.api.routes import deals, health, users
@@ -28,6 +29,11 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
 
 _is_dev = os.getenv("ENVIRONMENT", "dev") == "dev"
 
+# CORS_ALLOWED_ORIGINS is a comma-separated list of allowed origins.
+# Defaults to wildcard for local dev; set explicitly in prod Lambda env.
+_cors_origins_raw = os.getenv("CORS_ALLOWED_ORIGINS", "*")
+_cors_origins = [o.strip() for o in _cors_origins_raw.split(",") if o.strip()]
+
 app = FastAPI(
     title="Deal Finder API",
     description="AI-powered deal discovery system — REST API",
@@ -36,6 +42,14 @@ app = FastAPI(
     redoc_url="/api/v1/redoc" if _is_dev else None,
     openapi_url="/api/v1/openapi.json" if _is_dev else None,
     lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Register routers under /api/v1
