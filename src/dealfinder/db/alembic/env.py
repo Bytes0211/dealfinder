@@ -29,9 +29,14 @@ target_metadata = Base.metadata
 
 
 def get_url() -> str:
-    """Get database URL from environment or config."""
-    # Try environment variables first
-    db_config = DatabaseConfig()
+    """Get database URL from environment or config.
+
+    When ``DB_SECRET_ARN`` is set (Lambda / CI), credentials are fetched from
+    AWS Secrets Manager via ``_resolve_db_config`` before building the URL.
+    """
+    from dealfinder.db.connection import _resolve_db_config
+
+    db_config = _resolve_db_config()
     return db_config.sync_url
 
 
