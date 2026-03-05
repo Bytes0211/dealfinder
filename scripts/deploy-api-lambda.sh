@@ -41,7 +41,7 @@ cp -r "${PROJECT_ROOT}/src/dealfinder" "${BUILD_DIR}/package/"
 # Zip everything
 echo "▶ Creating zip..."
 cd "${BUILD_DIR}/package"
-zip -r "${ZIP_PATH}" . -x "*.pyc" -x "*/__pycache__/*" -x "*.dist-info/*" > /dev/null
+zip -r "${ZIP_PATH}" . -x "*.pyc" -x "*/__pycache__/*" > /dev/null
 echo "   Size: $(du -sh "${ZIP_PATH}" | cut -f1)"
 
 # Deploy to Lambda
