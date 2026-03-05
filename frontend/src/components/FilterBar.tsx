@@ -1,3 +1,5 @@
+import { CATEGORIES } from '../api/categories';
+
 interface Props {
   category: string;
   status: string;
@@ -13,11 +15,17 @@ export function FilterBar({ category, status, onCategoryChange, onStatusChange, 
     <div className="filter-bar">
       <input
         type="text"
-        placeholder="Filter by category…"
+        list="category-options"
+        placeholder="Search category…"
         value={category}
         onChange={(e) => onCategoryChange(e.target.value)}
         className="filter-input"
       />
+      <datalist id="category-options">
+        {CATEGORIES.map((c) => (
+          <option key={c} value={c} />
+        ))}
+      </datalist>
       <select
         value={status}
         onChange={(e) => onStatusChange(e.target.value)}

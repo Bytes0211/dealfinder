@@ -1,0 +1,23 @@
+/** Top-level deal categories (sourced from developer/categories.md). */
+export const CATEGORIES: string[] = [
+  'Electronics',
+  'Computers & Office',
+  'Clothing & Apparel',
+  'Shoes',
+  'Home & Kitchen',
+  'Appliances',
+  'Beauty & Personal Care',
+  'Health & Wellness',
+  'Sports & Outdoors',
+  'Toys & Games',
+  'Baby Products',
+  'Automotive',
+  'Tools & Home Improvement',
+  'Pet Supplies',
+  'Grocery',
+  'Books, Movies & Media',
+  'Office & School Supplies',
+  'Jewelry & Watches',
+  'Arts, Crafts & DIY',
+  'Miscellaneous',
+];
