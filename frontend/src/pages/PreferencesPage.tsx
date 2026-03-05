@@ -1,16 +1,31 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { getUserId } from '../auth';
-import { useUpdatePreferences } from '../hooks';
+import { useUpdatePreferences, useUserPreferences } from '../hooks';
 import { CategoryTagInput } from '../components/CategoryTagInput';
 import { InfoTooltip } from '../components/InfoTooltip';
 
 export function PreferencesPage() {
   const userId = getUserId() ?? '';
+  const { data: existing } = useUserPreferences(userId);
   const { mutate, isPending, isSuccess, isError } = useUpdatePreferences(userId);
 
   const [discountThreshold, setDiscountThreshold] = useState('');
   const [categories, setCategories] = useState<string[]>([]);
   const [pushoverKey, setPushoverKey] = useState('');
+
+  // Seed form fields once existing preferences are loaded
+  useEffect(() => {
+    if (!existing) return;
+    if (existing.discount_threshold != null) {
+      setDiscountThreshold(String(existing.discount_threshold));
+    }
+    if (existing.preferred_categories?.length) {
+      setCategories(existing.preferred_categories as string[]);
+    }
+    if (existing.pushover_user_key) {
+      setPushoverKey(existing.pushover_user_key);
+    }
+  }, [existing]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

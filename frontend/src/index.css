@@ -75,6 +75,8 @@ h1 { font-size: 1.6rem; font-weight: 700; }
 .btn-outline { background: transparent; border-color: var(--c-border); color: var(--c-text); }
 .btn-outline:hover { background: var(--c-bg); }
 .btn-sm { padding: .3rem .65rem; font-size: .8rem; }
+.btn-secondary { background: var(--c-surface); border-color: var(--c-border); color: var(--c-text); }
+.btn-secondary:hover { background: var(--c-bg); border-color: var(--c-primary); color: var(--c-primary); }
 .btn-lg { padding: .7rem 1.4rem; font-size: 1rem; }
 
 /* ── Filter bar ───────────────────────────────────── */
@@ -215,6 +217,39 @@ h1 { font-size: 1.6rem; font-weight: 700; }
   flex: 1;
   padding: .1rem 0;
 }
+
+/* ── Category browse panel ────────────────────────── */
+.category-browse { position: relative; display: inline-block; }
+.category-browse__panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 150;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: .5rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .15rem .75rem;
+  min-width: 320px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+.category-browse__item {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  padding: .25rem .35rem;
+  font-size: .8rem;
+  font-weight: 400;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.category-browse__item:hover { background: var(--c-bg); }
+.category-browse__item input[type="checkbox"] { accent-color: var(--c-primary); cursor: pointer; }
 
 /* ── Info tooltip ─────────────────────────────────── */
 .form-label-row { display: inline-flex; align-items: center; gap: .35rem; }
