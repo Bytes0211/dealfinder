@@ -182,7 +182,7 @@ variable "ses_sender_email" {
   default     = ""
 }
 
-variable "messenger_bedrock_model_id"
+variable "messenger_bedrock_model_id" {
   description = "Bedrock model ID for the MessengerAgent"
   type        = string
   default     = "anthropic.claude-3-sonnet-20240229-v1:0"
