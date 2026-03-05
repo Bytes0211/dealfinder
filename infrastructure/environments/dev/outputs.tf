@@ -85,6 +85,22 @@ output "aurora_security_group_id" {
   value       = var.enable_aurora ? module.aurora[0].security_group_id : null
 }
 
+# Frontend outputs (Phase 6)
+output "frontend_bucket_name" {
+  description = "S3 bucket name for the React frontend"
+  value       = module.frontend.bucket_name
+}
+
+output "frontend_cloudfront_distribution_id" {
+  description = "CloudFront distribution ID for the frontend"
+  value       = module.frontend.cloudfront_distribution_id
+}
+
+output "frontend_url" {
+  description = "Public HTTPS URL for the frontend"
+  value       = module.frontend.frontend_url
+}
+
 # OpenSearch outputs (Phase 2)
 output "opensearch_endpoint" {
   description = "OpenSearch domain endpoint"
