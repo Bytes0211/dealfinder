@@ -20,24 +20,19 @@ echo "================================================"
 # Install dependencies into build dir
 echo ""
 echo "▶ Installing dependencies..."
+# Install all dependencies from pyproject.toml (email-validator, etc. included)
 uv pip install \
     --target "${BUILD_DIR}/package" \
     --python 3.12 \
     --no-cache \
-    fastapi mangum sqlalchemy asyncpg aiosqlite \
-    pydantic pydantic-settings boto3 httpx \
-    feedparser openai \
-    2>/dev/null || \
+    "${PROJECT_ROOT}" 2>/dev/null || \
 uv pip install \
     --target "${BUILD_DIR}/package" \
     --python 3.12 \
     --no-cache \
-    -r "${PROJECT_ROOT}/pyproject.toml" 2>/dev/null || \
-pip install \
-    --target "${BUILD_DIR}/package" \
-    --quiet \
     fastapi mangum "sqlalchemy[asyncio]" asyncpg aiosqlite \
-    "pydantic>=2" "pydantic-settings>=2" boto3 httpx feedparser
+    "pydantic[email]>=2" "pydantic-settings>=2" boto3 httpx \
+    feedparser openai "email-validator"
 
 # Copy application source
 echo "▶ Copying source..."
