@@ -141,3 +141,16 @@ class UserResponse(BaseModel):
     notification_preferences: Optional[dict] = None
 
     model_config = {"from_attributes": True}
+
+
+class PreferencesUpdateResponse(UserResponse):
+    """Response for PUT /users/{id}/preferences.
+
+    Extends UserResponse with an optional informational message shown
+    when saved feeds are modified (e.g. to set latency expectations).
+
+    Attributes:
+        message: Optional human-readable note for the caller.
+    """
+
+    message: Optional[str] = None

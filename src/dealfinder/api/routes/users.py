@@ -17,7 +17,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import bcrypt
 
 from dealfinder.api.deps import get_current_user_id, get_db, get_token_claims
-from dealfinder.api.schemas import UserCreate, UserPreferencesUpdate, UserResponse, SavedFeed  # noqa: F401
+from dealfinder.api.schemas import (  # noqa: F401
+    PreferencesUpdateResponse,
+    SavedFeed,
+    UserCreate,
+    UserPreferencesUpdate,
+    UserResponse,
+)
 from dealfinder.data.repository import UserRepository
 from dealfinder.db.models import User
 
@@ -173,7 +179,7 @@ async def get_user(
     return UserResponse.model_validate(user)
 
 
-@router.put("/{user_id}/preferences", response_model=UserResponse,
+@router.put("/{user_id}/preferences", response_model=PreferencesUpdateResponse,
             summary="Update notification preferences")
 async def update_preferences(
     user_id: UUID,
@@ -181,7 +187,7 @@ async def update_preferences(
     db: AsyncSession = Depends(get_db),
     current_user_id: UUID = Depends(get_current_user_id),
     token_claims: dict = Depends(get_token_claims),
-) -> UserResponse:
+) -> PreferencesUpdateResponse:
     """Update a user's notification preferences.
 
     Users may only update their own preferences.  If no DB record exists yet
@@ -226,4 +232,12 @@ async def update_preferences(
 
     await db.flush()
     await db.refresh(user)
-    return UserResponse.model_validate(user)
+
+    message: str | None = None
+    if body.saved_feeds is not None:
+        message = "Feed saved. Deals from new feeds will appear within 15 minutes."
+
+    return PreferencesUpdateResponse(
+        **UserResponse.model_validate(user).model_dump(),
+        message=message,
+    )
