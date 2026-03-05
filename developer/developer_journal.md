@@ -1154,3 +1154,200 @@ All existing 97 tests from Phase 1 continue to pass. Phase 2 tests are ready to 
 
 **Session End:** February 17, 2026 23:35 UTC  
 **Status:** ✅ Phase 2 Complete - Data Layer Implemented - Ready for Phase 3
+
+---
+
+## Session 4: Phase 6 - React Frontend + Prod Infrastructure (March 5, 2026)
+
+**Date:** March 5, 2026
+**Time:** ~00:00 - 18:30 UTC
+**Duration:** ~18 hours
+**Phase:** Phase 6 - React Frontend + Phase 5 partial (Terraform prod env)
+**Status:** 🚧 85% Complete — app live, API Lambda placeholder pending real deploy
+
+### Objective
+
+Build and deploy the Phase 6 React SPA (Vite + React + TypeScript) behind Cognito Hosted UI auth, wire the Terraform production environment, create a GitHub Actions deploy workflow, and get the frontend live on CloudFront.
+
+---
+
+### Actions Taken
+
+#### 1. React SPA Scaffold and Implementation
+
+**Tech stack:** Vite 7 + React 19 + TypeScript, Node 22 (upgraded from 18)
+
+**Files created under `frontend/src/`:**
+- `api/types.ts` — TypeScript interfaces mirroring all backend Pydantic schemas
+- `api/client.ts` — axios instance with auth interceptor (Bearer token)
+- `api/deals.ts` — `listDeals`, `topDeals`, `getDeal`
+- `api/users.ts` — `updatePreferences`
+- `auth/config.ts` — Cognito Hosted UI config from `VITE_*` env vars
+- `auth/index.ts` — `login`, `logout`, `handleCallback`, `isAuthenticated`, `getAccessToken`, `setUserId`, `getUserId`
+- `hooks/index.ts` — TanStack Query hooks: `useDeals`, `useTopDeals`, `useDeal`, `useUpdatePreferences`
+- `components/` — NavBar, DealCard, FilterBar, Pagination, ProtectedRoute
+- `pages/` — FeedPage, TopDealsPage, DealDetailPage, PreferencesPage, LoginPage, CallbackPage
+- `App.tsx` — BrowserRouter + QueryClientProvider + all routes
+- `index.css` — Custom CSS (no component library)
+- `.env.example`, `vite.config.ts` (with `/api` proxy to `localhost:8000`)
+
+`npm run build` passes with 0 type errors.
+
+---
+
+#### 2. Terraform — Production Environment
+
+**Created:** `infrastructure/environments/prod/` (main.tf, variables.tf, outputs.tf)
+
+**Key design decisions:**
+- `enable_aurora=true`, `enable_nat_gateway=true` by default in prod
+- `enable_opensearch=false`, `enable_frontend=false` (flip to enable)
+- `create_cost_anomaly_monitor=false` — AWS limits to 1 DIMENSIONAL monitor per account (dev already owns it)
+- `cors_allowed_origins` scoped to CloudFront domain when `enable_frontend=true`
+- All three pipeline/notifications/api modules get `create_cloudwatch_alarms=true`
+
+**Issues encountered and resolved:**
+
+| Error | Root Cause | Fix |
+|-------|-----------|-----|
+| `dynamodb_table` deprecated warning | Terraform 1.14 dropped param | Replaced with `use_lockfile = true` |
+| `cors_allowed_origins` not expected | Variable not declared in API module | Added `cors_allowed_origins` variable to `modules/api/variables.tf` |
+| `format` required in `access_log_settings` | AWS provider enforcement | Added JSON log format to API Gateway stage |
+| Invalid count argument (3 modules) | `count` can't depend on module output (unknown at plan time) | Replaced `alarm_sns_topic_arn != ""` with static `create_cloudwatch_alarms` bool |
+| RDS CreateDBCluster: no password | `aurora_master_password` empty default | Set via `terraform.tfvars` (not committed) |
+| Cost Explorer limit exceeded | 1 DIMENSIONAL monitor per account, dev owns it | Added `create_cost_anomaly_monitor=false` to prod |
+| S3 state bucket missing | Prod bootstrap not run | Ran `./bootstrap.sh us-east-1 prod` |
+
+---
+
+#### 3. Terraform — Frontend Module
+
+**Created:** `infrastructure/modules/frontend/` (main.tf, variables.tf, outputs.tf)
+
+- Private S3 bucket for build artifacts
+- CloudFront OAC distribution (Origin Access Control, not legacy OAI)
+- SPA 403/404 fallback to `index.html` for client-side routing
+- Outputs: `bucket_name`, `cloudfront_distribution_id`, `cloudfront_domain_name`, `frontend_url`
+
+---
+
+#### 4. Cognito Hosted UI
+
+**Added to `modules/api/`:**
+- `aws_cognito_user_pool_domain` resource (gated on `cognito_domain_prefix`)
+- OAuth implicit flow enabled on app client (`response_type=token`, scopes: openid, email, profile)
+- `cognito_callback_urls` and `cognito_logout_urls` variables
+- `cognito_hosted_ui_domain` output
+- Prod domain prefix: `dealfinder-prod` → `dealfinder-prod.auth.us-east-1.amazoncognito.com`
+
+---
+
+#### 5. GitHub Actions — Frontend Deploy Workflow
+
+**Created:** `.github/workflows/frontend.yml`
+
+- Triggers: push to `main` with `frontend/**` changes, or `workflow_dispatch`
+- Steps: Node 22 → `npm ci` → Vite build (VITE_* secrets) → OIDC AWS auth → S3 sync → CloudFront invalidation
+- Assets: `Cache-Control: immutable` (1 year); `index.html`: `no-cache`
+- Uses `environment: production` GitHub environment
+
+---
+
+#### 6. GitHub Actions OIDC Setup
+
+**Created:** `infrastructure/bootstrap-oidc/main.tf`
+
+- `aws_iam_openid_connect_provider` for `token.actions.githubusercontent.com`
+- IAM role `dealfinder-github-deploy` scoped to `Bytes0211/dealfinder` repo
+- Policy: `s3:PutObject/DeleteObject/GetObject/ListBucket` on `dealfinder-frontend-prod*`, `cloudfront:CreateInvalidation`
+
+**Issues encountered:**
+
+| Error | Root Cause | Fix |
+|-------|-----------|-----|
+| `Not authorized to perform sts:AssumeRoleWithWebIdentity` | OIDC `sub` claim changes to `repo:...:environment:production` when job uses `environment:` | Added environment sub to trust policy `StringLike` condition |
+| `AccessDenied on ListObjectsV2` | S3 ARN pattern `dealfinder-prod-frontend-*` didn't match actual bucket name `dealfinder-frontend-prod*` | Corrected ARN prefix pattern |
+
+**Deploy role ARN:** `arn:aws:iam::696056865313:role/dealfinder-github-deploy`
+
+---
+
+#### 7. Auth Bug Fixes (post-deploy)
+
+**Bug 1 — userId never set after login:**
+`handleCallback()` stored the access token but never extracted the Cognito `sub` claim. `PreferencesPage` always called `updatePreferences("", body)`, producing a 404/400.
+
+**Fix:** Added `decodeJwtPayload()` helper; `handleCallback()` now decodes the access token JWT and calls `setUserId(payload.sub)`.
+
+**Bug 2 — Stale token keeps user "logged in":**
+`isAuthenticated()` only checked token presence, not expiry. A 60-minute Cognito token would leave the user in a broken auth state after expiry.
+
+**Fix:** `isAuthenticated()` now decodes the JWT and checks `payload.exp` against `Date.now()`. Stale tokens are cleared automatically.
+
+---
+
+#### 8. API Lambda — Placeholder Code
+
+The `dealfinder-prod-api` Lambda was created by Terraform with placeholder code (`def handler(event, context): return {}`). All API calls from the frontend return 502s until the real FastAPI code is deployed.
+
+**Created:** `scripts/deploy-api-lambda.sh` — packages `src/dealfinder` + dependencies into a zip and deploys via `aws lambda update-function-code`.
+
+**Status:** Script created; deployment pending.
+
+---
+
+### Deployment State
+
+| Resource | Status | URL / ID |
+|----------|--------|----------|
+| CloudFront distribution | ✅ Live | `dk39ppkr0zciw.cloudfront.net` |
+| Frontend S3 bucket | ✅ Live | `dealfinder-frontend-prodEVEJ6M742P8S8` |
+| Cognito Hosted UI | ✅ Live | `dealfinder-prod.auth.us-east-1.amazoncognito.com` |
+| API Gateway | ✅ Live | (see `terraform output api_endpoint`) |
+| API Lambda code | ⏳ Placeholder | Run `./scripts/deploy-api-lambda.sh prod` |
+| Aurora cluster | ✅ Deployed | `enable_aurora=true` in prod |
+
+---
+
+### Lessons Learned
+
+1. **OIDC sub claim changes with GitHub environments** — When a job uses `environment: production`, the OIDC sub becomes `repo:...:environment:production`, not the branch ref. Trust policies must allow both values.
+
+2. **Terraform `count` and unknown values** — `count` cannot depend on module output attributes that are unknown at plan time. Use a static bool variable instead of deriving count from a resource ARN.
+
+3. **AWS Cost Explorer limit** — Only one `DIMENSIONAL` anomaly monitor allowed per account. Use `create_cost_anomaly_monitor` flag to skip duplicate creation in additional environments.
+
+4. **Terraform `use_lockfile = true`** — Replaces deprecated `dynamodb_table` for S3 backend state locking in Terraform >= 1.10. Uses a `.tflock` file in the S3 bucket directly.
+
+5. **JWT sub extraction on client** — Cognito's access token is a JWT containing `sub`. No server-side introspection needed; decode client-side (no signature verification required for claims like sub/exp).
+
+6. **Cache headers on S3/CloudFront** — Hashed assets (JS/CSS) get `max-age=31536000, immutable`. `index.html` must get `no-cache` so users always receive the latest entry point on deploy.
+
+---
+
+### GitHub Secrets Required
+
+| Secret | Value Source |
+|--------|--------------|
+| `VITE_API_BASE_URL` | `terraform output -raw api_endpoint` |
+| `VITE_COGNITO_DOMAIN` | `terraform output -raw cognito_hosted_ui_domain` |
+| `VITE_COGNITO_CLIENT_ID` | `terraform output -raw cognito_client_id` |
+| `VITE_COGNITO_REDIRECT_URI` | `https://dk39ppkr0zciw.cloudfront.net/auth/callback` |
+| `FRONTEND_BUCKET_NAME` | `terraform output -raw frontend_bucket_name` |
+| `CLOUDFRONT_DISTRIBUTION_ID` | `terraform output -raw cloudfront_distribution_id` |
+| `AWS_DEPLOY_ROLE_ARN` | `arn:aws:iam::696056865313:role/dealfinder-github-deploy` |
+
+---
+
+### Next Steps
+
+1. Run `./scripts/deploy-api-lambda.sh prod` to deploy real FastAPI code to `dealfinder-prod-api`
+2. Run Alembic migrations against Aurora prod cluster
+3. Test full login → deal browse → preferences flow end-to-end
+4. Add backend Lambda CI/CD to GitHub Actions (`backend.yml`)
+5. Phase 5: integration tests + CloudWatch dashboard review
+
+---
+
+**Session End:** March 5, 2026 18:30 UTC
+**Status:** 🚧 Phase 6 frontend live at https://dk39ppkr0zciw.cloudfront.net — API Lambda deployment pending
