@@ -205,6 +205,16 @@ module "api" {
   tags = local.common_tags
 }
 
+# Frontend Module (Phase 6)
+module "frontend" {
+  source = "../../modules/frontend"
+
+  project_name = var.project_name
+  environment  = var.environment
+
+  tags = local.common_tags
+}
+
 # Pipeline Module (Phase 3)
 module "pipeline" {
   source = "../../modules/pipeline"
