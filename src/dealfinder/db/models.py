@@ -52,7 +52,7 @@ class NotificationChannel(str, Enum):
     """Notification delivery channels."""
 
     EMAIL = "email"
-    PUSHOVER = "pushover"
+    SNS = "sns"
     SMS = "sms"
     WEBSOCKET = "websocket"
 
@@ -197,7 +197,6 @@ class User(Base):
     preferred_categories: Mapped[Optional[list]] = mapped_column(JSONB, default=list)
     
     # External integrations
-    pushover_user_key: Mapped[Optional[str]] = mapped_column(String(255))
     
     # Timestamps
     last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
@@ -275,8 +274,8 @@ class Notification(Base):
     id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True), primary_key=True, default=uuid4
     )
-    user_id: Mapped[UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    user_id: Mapped[Optional[UUID]] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=True
     )
     deal_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("deals.id", ondelete="CASCADE"), nullable=False

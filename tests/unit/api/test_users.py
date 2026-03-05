@@ -93,7 +93,7 @@ class TestUpdateUserPreferences:
     def test_updates_preferences_with_valid_auth(self, client, user) -> None:
         """Owner should be able to update their own preferences."""
         payload = {
-            "notification_preferences": {"pushover": True, "email": False},
+            "notification_preferences": {"email": True},
             "discount_threshold": "30.00",
         }
         response = client.put(
@@ -137,11 +137,13 @@ class TestUpdateUserPreferences:
         )
         assert response.status_code == 404
 
-    def test_updates_pushover_key(self, client, user) -> None:
-        """Pushover user key should be updated when provided."""
+    def test_updates_preferred_categories(self, client, user) -> None:
+        """Preferred categories list should be updated when provided."""
         response = client.put(
             f"/api/v1/users/{user.id}/preferences",
-            json={"pushover_user_key": "pushover-key-abc"},
+            json={"preferred_categories": ["Electronics", "Home & Kitchen"]},
             headers={"X-Test-User-Id": str(user.id)},
         )
         assert response.status_code == 200
+        body = response.json()
+        assert body["preferred_categories"] == ["Electronics", "Home & Kitchen"]

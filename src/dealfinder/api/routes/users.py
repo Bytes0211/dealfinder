@@ -227,9 +227,6 @@ async def update_preferences(
         user.discount_threshold = body.discount_threshold
     if body.preferred_categories is not None:
         user.preferred_categories = body.preferred_categories
-    if body.pushover_user_key is not None:
-        user.pushover_user_key = body.pushover_user_key
-
     await db.flush()
     await db.refresh(user)
 

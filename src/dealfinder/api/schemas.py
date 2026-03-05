@@ -106,14 +106,12 @@ class UserPreferencesUpdate(BaseModel):
         notification_preferences: Channel-level opt-in/opt-out flags.
         discount_threshold: Minimum discount to trigger a notification.
         preferred_categories: Categories the user is interested in.
-        pushover_user_key: Pushover user key for push notifications.
         saved_feeds: User's saved feed filters for the Feed page UI.
     """
 
     notification_preferences: Optional[dict] = None
     discount_threshold: Optional[Decimal] = Field(None, ge=0, le=100)
     preferred_categories: Optional[list[str]] = None
-    pushover_user_key: Optional[str] = None
     saved_feeds: Optional[list[SavedFeed]] = None
 
 
@@ -139,6 +137,7 @@ class UserResponse(BaseModel):
     discount_threshold: Decimal
     preferred_categories: Optional[list] = None
     notification_preferences: Optional[dict] = None
+    # pushover_user_key removed — notifications now via SNS topic subscription
 
     model_config = {"from_attributes": True}
 

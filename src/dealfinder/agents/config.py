@@ -4,7 +4,6 @@ Reads all settings from environment variables with the DEALFINDER_ prefix,
 with sensible defaults suitable for local development.
 """
 
-from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -17,7 +16,7 @@ class AgentConfig(BaseSettings):
         bedrock_model_id: Bedrock model identifier for Claude (Evaluator).
         notification_queue_url: SQS URL for the notification-dispatch queue.
         ses_sender_email: Verified SES sender address for email notifications.
-        pushover_api_token: Pushover application token (SecretStr; from Secrets Manager).
+        sns_topic_arn: ARN of the SNS topic for deal alert fan-out.
         dedup_table_name: DynamoDB table used for 24-hour notification deduplication.
     """
 
@@ -35,5 +34,5 @@ class AgentConfig(BaseSettings):
 
     # Messenger Agent fields
     ses_sender_email: str = ""
-    pushover_api_token: SecretStr = SecretStr("")
+    sns_topic_arn: str = ""
     dedup_table_name: str = ""

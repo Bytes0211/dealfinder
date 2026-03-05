@@ -38,7 +38,6 @@ export interface UserResponse {
   discount_threshold: string;
   preferred_categories: string[] | null;
   notification_preferences: Record<string, unknown> | null;
-  pushover_user_key: string | null;
 }
 
 /** Mirrors backend UserPreferencesUpdate Pydantic schema. */
@@ -46,7 +45,6 @@ export interface UserPreferencesUpdate {
   notification_preferences?: Record<string, unknown> | null;
   discount_threshold?: string | null;
   preferred_categories?: string[] | null;
-  pushover_user_key?: string | null;
   saved_feeds?: SavedFeed[] | null;
 }
 

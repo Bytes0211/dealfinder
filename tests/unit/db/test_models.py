@@ -43,7 +43,7 @@ class TestNotificationChannel:
     def test_channel_values(self):
         """Test all channel values exist."""
         assert NotificationChannel.EMAIL == "email"
-        assert NotificationChannel.PUSHOVER == "pushover"
+        assert NotificationChannel.SNS == "sns"
         assert NotificationChannel.SMS == "sms"
         assert NotificationChannel.WEBSOCKET == "websocket"
 

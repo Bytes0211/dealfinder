@@ -28,6 +28,11 @@ resource "aws_cognito_user_pool" "main" {
 
   username_attributes = ["email"]
 
+  email_configuration {
+    email_sending_account = "COGNITO_DEFAULT"
+    from_email_address    = "DealFinder <no-reply@verificationemail.com>"
+  }
+
   schema {
     name                = "email"
     attribute_data_type = "String"

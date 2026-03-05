@@ -63,7 +63,7 @@ def _make_config(**kwargs) -> AgentConfig:
         bedrock_region="us-east-1",
         bedrock_model_id="anthropic.claude-3-sonnet-20240229-v1:0",
         notification_queue_url="",
-        pushover_api_token="",
+        sns_topic_arn="",
         ses_sender_email="",
         dedup_table_name="",
     )
@@ -194,21 +194,31 @@ class TestMessengerAgentIsDuplicate:
 # ─────────────────────────────────────────────
 
 
-class TestDispatchToUser:
-    """Tests for MessengerAgent._dispatch_to_user."""
+class TestDispatch:
+    """Tests for MessengerAgent._dispatch."""
 
-    async def test_returns_true_when_no_eligible_users(self) -> None:
-        """When no active users have any eligible channel, return True (not a channel failure)."""
-        config = _make_config()  # no pushover token or SES sender — both channels unavailable
+    async def test_returns_true_when_no_channels_configured(self) -> None:
+        """When neither SNS nor SES is configured, return (True, 0)."""
+        config = _make_config()  # no sns_topic_arn or ses_sender_email
         agent = MessengerAgent(config=config)
 
-        mock_user = MagicMock()
-        mock_user.pushover_user_key = None
-        mock_user.email = "test@example.com"
-        mock_user.notification_preferences = {"email": False, "pushover": False}
+        deal = _make_deal()
+        result = await agent._dispatch(deal, "Title", "Message")
 
-        mock_repo = AsyncMock()
-        mock_repo.find_active_users.return_value = [mock_user]
+        assert result == (True, 0)
+
+    async def test_publishes_to_sns_when_configured(self) -> None:
+        """When sns_topic_arn is set, SNS publish should be called once."""
+        config = _make_config(sns_topic_arn="arn:aws:sns:us-east-1:123:topic")
+        mock_sns = MagicMock()
+        mock_sns.publish.return_value = "msg-id-123"
+        agent = MessengerAgent(config=config, sns=mock_sns)
+
+        mock_notif_repo = AsyncMock()
+        mock_notif = MagicMock()
+        mock_notif.id = uuid4()
+        mock_notif_repo.create.return_value = mock_notif
+        mock_notif_repo.mark_as_sent = AsyncMock()
 
         mock_session = AsyncMock()
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
@@ -217,11 +227,13 @@ class TestDispatchToUser:
         deal = _make_deal()
         with (
             patch("dealfinder.agents.messenger.get_async_session", return_value=mock_session),
-            patch("dealfinder.agents.messenger.UserRepository", return_value=mock_repo),
+            patch("dealfinder.agents.messenger.NotificationRepository", return_value=mock_notif_repo),
         ):
-            result = await agent._dispatch_to_user(deal, "Title", "Message")
+            success, attempted = await agent._dispatch(deal, "Title", "Message")
 
-        assert result == (True, 0)
+        assert success is True
+        assert attempted == 1
+        mock_sns.publish.assert_called_once_with("Title", "Message")
 
 
 # ─────────────────────────────────────────────
@@ -281,7 +293,7 @@ class TestMessengerAgentNotifyDeal:
         with (
             patch.object(agent, "_is_duplicate", return_value=False),
             patch.object(agent, "_craft_message", return_value=("Title", "Message")),
-            patch.object(agent, "_dispatch_to_user", new_callable=AsyncMock, return_value=(True, 2)),
+            patch.object(agent, "_dispatch", new_callable=AsyncMock, return_value=(True, 2)),
             patch("dealfinder.agents.messenger.get_async_session", return_value=mock_session),
             patch("dealfinder.agents.messenger.DealRepository", return_value=mock_deal_repo),
         ):
@@ -307,7 +319,7 @@ class TestMessengerAgentNotifyDeal:
         with (
             patch.object(agent, "_is_duplicate", return_value=False),
             patch.object(agent, "_craft_message", return_value=("Title", "Message")),
-            patch.object(agent, "_dispatch_to_user", new_callable=AsyncMock, return_value=(False, 2)),
+            patch.object(agent, "_dispatch", new_callable=AsyncMock, return_value=(False, 2)),
             patch("dealfinder.agents.messenger.get_async_session", return_value=mock_session),
             patch("dealfinder.agents.messenger.DealRepository", return_value=mock_deal_repo),
         ):

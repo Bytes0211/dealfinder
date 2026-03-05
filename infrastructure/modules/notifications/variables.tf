@@ -86,13 +86,7 @@ variable "db_name" {
   default     = "dealfinder"
 }
 
-variable "pushover_secret_arn" {
-  description = "ARN of the Secrets Manager secret containing the Pushover API token (key: PUSHOVER_API_TOKEN)"
-  type        = string
-  default     = ""
-}
-
-variable "ses_sender_email" {
+variable "ses_sender_email"
   description = "Verified SES sender email address for deal alert emails"
   type        = string
   default     = ""

@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { getUserId } from '../auth';
 import { useUpdatePreferences, useUserPreferences } from '../hooks';
 import { CategoryTagInput } from '../components/CategoryTagInput';
-import { InfoTooltip } from '../components/InfoTooltip';
 
 export function PreferencesPage() {
   const userId = getUserId() ?? '';
@@ -11,7 +10,6 @@ export function PreferencesPage() {
 
   const [discountThreshold, setDiscountThreshold] = useState('');
   const [categories, setCategories] = useState<string[]>([]);
-  const [pushoverKey, setPushoverKey] = useState('');
 
   // Seed form fields once existing preferences are loaded
   useEffect(() => {
@@ -22,9 +20,6 @@ export function PreferencesPage() {
     if (existing.preferred_categories?.length) {
       setCategories(existing.preferred_categories as string[]);
     }
-    if (existing.pushover_user_key) {
-      setPushoverKey(existing.pushover_user_key);
-    }
   }, [existing]);
 
   function handleSubmit(e: React.FormEvent) {
@@ -32,7 +27,6 @@ export function PreferencesPage() {
     mutate({
       discount_threshold: discountThreshold || null,
       preferred_categories: categories.length > 0 ? categories : null,
-      pushover_user_key: pushoverKey || null,
     });
   }
 
@@ -57,20 +51,6 @@ export function PreferencesPage() {
         </label>
 
         <CategoryTagInput value={categories} onChange={setCategories} />
-
-        <label className="form-label">
-          <span className="form-label-row">
-            Pushover User Key
-            <InfoTooltip text="Your personal Pushover User Key, found on your dashboard at pushover.net. The app uses it to send deal alerts directly to your phone or device via the Pushover app." />
-          </span>
-          <input
-            type="text"
-            value={pushoverKey}
-            onChange={(e) => setPushoverKey(e.target.value)}
-            placeholder="Your Pushover user key"
-            className="form-input"
-          />
-        </label>
 
         <button type="submit" disabled={isPending} className="btn btn-primary">
           {isPending ? 'Saving…' : 'Save Preferences'}

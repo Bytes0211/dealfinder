@@ -199,7 +199,6 @@ module "notifications" {
   db_secret_arn       = var.db_secret_arn
   db_host             = try(module.aurora[0].cluster_endpoint, "")
   db_name             = var.aurora_database_name
-  pushover_secret_arn = var.pushover_secret_arn
   ses_sender_email    = var.ses_sender_email
 
   tags = local.common_tags

@@ -136,7 +136,6 @@ resource "aws_iam_role_policy" "messenger_inline" {
         Action = ["secretsmanager:GetSecretValue"]
         Resource = [
           "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/${var.environment}/*",
-          var.pushover_secret_arn != "" ? var.pushover_secret_arn : "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:none",
         ]
       },
       {
@@ -188,11 +187,11 @@ resource "aws_lambda_function" "messenger" {
       DEALFINDER_BEDROCK_REGION   = var.aws_region
       DEALFINDER_BEDROCK_MODEL_ID = var.bedrock_model_id
       DEALFINDER_SES_SENDER_EMAIL = var.ses_sender_email
+      DEALFINDER_SNS_TOPIC_ARN    = aws_sns_topic.deal_notifications.arn
       DEALFINDER_DEDUP_TABLE_NAME = aws_dynamodb_table.dedup.name
       DB_HOST                     = var.db_host
       DB_NAME                     = var.db_name
       DB_SECRET_ARN               = var.db_secret_arn
-      PUSHOVER_SECRET_ARN         = var.pushover_secret_arn
     }
   }
 

@@ -8,8 +8,8 @@ For each record the agent:
 1. Parses ``deal_id`` from the SQS record body.
 2. Checks a DynamoDB deduplication key — skips if notified within 24 h.
 3. Fetches the deal from Aurora and crafts a title + message via Bedrock.
-4. Dispatches via Pushover (if the user has a ``pushover_user_key``) and/or
-   SES email.
+4. Publishes to the SNS ``deal_notifications`` topic (fan-out to all
+   subscribers) and optionally sends per-user SES email.
 5. Persists a ``Notification`` row in Aurora for each dispatch attempt.
 6. Only if at least one channel succeeded: marks the deal ``NOTIFIED`` and
    writes the DynamoDB dedup key.  If all channels fail, raises so SQS retries.
@@ -42,8 +42,8 @@ from dealfinder.db.models import (
     NotificationChannel,
     NotificationStatus,
 )
-from dealfinder.notifications.pushover import PushoverClient
 from dealfinder.notifications.ses import SesClient
+from dealfinder.notifications.sns import SnsClient
 
 logger = logging.getLogger(__name__)
 
@@ -106,10 +106,11 @@ def _parse_notification_text(response_text: str) -> tuple[str, str]:
 
 
 class MessengerAgent:
-    """Dispatches deal notifications to users via Pushover and SES email.
+    """Dispatches deal notifications via SNS fan-out and optional SES email.
 
-    Reads SQS batch records, deduplicates using DynamoDB, crafts personalized
-    messages via Bedrock, and dispatches through configured channels.
+    Reads SQS batch records, deduplicates using DynamoDB, crafts messages
+    via Bedrock, publishes to the SNS deal-notifications topic, and
+    optionally sends per-user SES email.
 
     Example:
         agent = MessengerAgent()
@@ -120,19 +121,22 @@ class MessengerAgent:
     def __init__(
         self,
         config: AgentConfig | None = None,
-        pushover: PushoverClient | None = None,
+        sns: SnsClient | None = None,
         ses: SesClient | None = None,
     ) -> None:
         """Initialise the Messenger Agent.
 
         Args:
             config: Agent configuration.  Loaded from environment if not provided.
-            pushover: Pushover client.  Created from config if not provided.
+            sns: SNS client.  Created from config if not provided.
             ses: SES email client.  Created from config if not provided.
         """
         self.config = config or AgentConfig()
-        token = self.config.pushover_api_token.get_secret_value()
-        self._pushover = pushover or (PushoverClient(token) if token else None)
+        self._sns = sns or (
+            SnsClient(self.config.sns_topic_arn, self.config.bedrock_region)
+            if self.config.sns_topic_arn
+            else None
+        )
         self._ses = ses or (
             SesClient(self.config.ses_sender_email, self.config.bedrock_region)
             if self.config.ses_sender_email
@@ -226,16 +230,17 @@ class MessengerAgent:
         message = f"Sale price: ${float(deal.sale_price or 0):.2f} — {deal.url}"
         return title[:250], message[:1024]
 
-    async def _dispatch_to_user(
+    async def _dispatch(
         self,
         deal: Deal,
         title: str,
         message: str,
     ) -> tuple[bool, int]:
-        """Dispatch a notification to all eligible users.
+        """Dispatch a deal notification via SNS and optional per-user SES email.
 
-        Iterates active users, filters by preference and available keys,
-        dispatches via Pushover and/or SES, and records each attempt.
+        Publishes once to the SNS topic (fan-out to all subscribers) and
+        iterates active users to send personalised SES email to those who
+        have email notifications enabled.
 
         Args:
             deal: The evaluated deal being notified.
@@ -244,56 +249,62 @@ class MessengerAgent:
 
         Returns:
             Tuple of (success, channels_attempted) where success is True if at
-            least one send succeeded or no users were eligible, and
-            channels_attempted is the total number of per-channel send attempts
-            across all eligible users.
+            least one channel succeeded, and channels_attempted is the total
+            number of dispatch attempts made.
         """
-        async with get_async_session() as session:
-            user_repo = UserRepository(session)
-            users = await user_repo.find_active_users()
-
-        eligible_count = 0
         channels_attempted = 0
         any_sent = False
         loop = asyncio.get_running_loop()
 
-        for user in users:
-            prefs = user.notification_preferences or {}
-            want_pushover = bool(user.pushover_user_key and prefs.get("pushover", True) and self._pushover)
-            want_email = bool(user.email and prefs.get("email", False) and self._ses)
-            if not want_pushover and not want_email:
-                continue
-            eligible_count += 1
-
-            if want_pushover:
-                channels_attempted += 1
-                notif = Notification(
-                    user_id=user.id,
-                    deal_id=deal.id,
-                    channel=NotificationChannel.PUSHOVER,
-                    status=NotificationStatus.PENDING,
-                    title=title,
-                    message=message,
-                )
+        # ── SNS publish (single fan-out to all subscribers) ──────────────────
+        if self._sns:
+            channels_attempted += 1
+            notif = Notification(
+                user_id=None,  # type: ignore[arg-type]  # broadcast — no single user
+                deal_id=deal.id,
+                channel=NotificationChannel.SNS,
+                status=NotificationStatus.PENDING,
+                title=title,
+                message=message,
+            )
+            # Persist a broadcast notification row (user_id nullable for SNS)
+            # Best-effort — don't let DB issues block the SNS publish
+            try:
                 async with get_async_session() as session:
                     nr = NotificationRepository(session)
                     notif = await nr.create(notif)
+                sns_notif_id = notif.id
+            except Exception as exc:
+                logger.warning(f"Could not persist SNS notification row: {exc}")
+                sns_notif_id = None
 
-                try:
-                    receipt = await loop.run_in_executor(
-                        None, self._pushover.send, user.pushover_user_key, title, message
-                    )
+            try:
+                msg_id = await loop.run_in_executor(
+                    None, self._sns.publish, title, message
+                )
+                if sns_notif_id:
                     async with get_async_session() as session:
                         nr = NotificationRepository(session)
-                        await nr.mark_as_sent(notif.id, external_id=receipt)
-                    any_sent = True
-                except Exception as exc:
-                    logger.error(f"Pushover dispatch failed for user {user.id}: {exc}")
+                        await nr.mark_as_sent(sns_notif_id, external_id=msg_id)
+                any_sent = True
+            except Exception as exc:
+                logger.error(f"SNS publish failed for deal {deal.id}: {exc}")
+                if sns_notif_id:
                     async with get_async_session() as session:
                         nr = NotificationRepository(session)
-                        await nr.mark_as_failed(notif.id, error_message=str(exc))
+                        await nr.mark_as_failed(sns_notif_id, error_message=str(exc))
 
-            if want_email:
+        # ── Per-user SES email ────────────────────────────────────────────────
+        if self._ses:
+            async with get_async_session() as session:
+                user_repo = UserRepository(session)
+                users = await user_repo.find_active_users()
+
+            for user in users:
+                prefs = user.notification_preferences or {}
+                if not (user.email and prefs.get("email", False)):
+                    continue
+
                 channels_attempted += 1
                 notif_email = Notification(
                     user_id=user.id,
@@ -308,12 +319,12 @@ class MessengerAgent:
                     notif_email = await nr.create(notif_email)
 
                 try:
-                    msg_id = await loop.run_in_executor(
+                    email_id = await loop.run_in_executor(
                         None, self._ses.send_email, user.email, title, message
                     )
                     async with get_async_session() as session:
                         nr = NotificationRepository(session)
-                        await nr.mark_as_sent(notif_email.id, external_id=msg_id)
+                        await nr.mark_as_sent(notif_email.id, external_id=email_id)
                     any_sent = True
                 except Exception as exc:
                     logger.error(f"SES dispatch failed for user {user.id}: {exc}")
@@ -321,8 +332,8 @@ class MessengerAgent:
                         nr = NotificationRepository(session)
                         await nr.mark_as_failed(notif_email.id, error_message=str(exc))
 
-        if eligible_count == 0:
-            return True, 0  # no eligible users — not a channel failure, treat as success
+        if channels_attempted == 0:
+            return True, 0  # no channels configured — treat as success
         return any_sent, channels_attempted
 
     async def notify_deal(self, deal_id: UUID) -> dict:
@@ -363,7 +374,7 @@ class MessengerAgent:
 
         title, message = await loop.run_in_executor(None, self._craft_message, deal)
 
-        any_sent, channels_attempted = await self._dispatch_to_user(deal, title, message)
+        any_sent, channels_attempted = await self._dispatch(deal, title, message)
 
         if not any_sent:
             raise RuntimeError(
