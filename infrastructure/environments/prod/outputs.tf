@@ -104,6 +104,23 @@ output "opensearch_security_group_id" {
   value       = var.enable_opensearch ? module.opensearch[0].security_group_id : null
 }
 
+# ── API ─────────────────────────────────────────────────────────────────────
+
+output "api_endpoint" {
+  description = "Base URL of the API Gateway HTTP API"
+  value       = module.api.api_endpoint
+}
+
+output "cognito_client_id" {
+  description = "Cognito user pool client ID"
+  value       = module.api.cognito_client_id
+}
+
+output "cognito_user_pool_endpoint" {
+  description = "Cognito user pool endpoint (use to derive Hosted UI domain)"
+  value       = module.api.cognito_user_pool_endpoint
+}
+
 # ── Frontend (Phase 6) ───────────────────────────────────────────────────────
 
 output "frontend_bucket_name" {
