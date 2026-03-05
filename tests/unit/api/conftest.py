@@ -6,7 +6,7 @@ Provides:
 - Pre-seeded User and Deal fixtures
 """
 
-import hashlib
+import bcrypt
 from decimal import Decimal
 from uuid import uuid4
 
@@ -136,7 +136,7 @@ async def user(session) -> User:
     u = User(
         email="test@example.com",
         username="testuser",
-        hashed_password=hashlib.sha256(b"password123").hexdigest(),
+        hashed_password=bcrypt.hashpw(b"password123", bcrypt.gensalt()).decode(),
         full_name="Test User",
         is_active=True,
     )

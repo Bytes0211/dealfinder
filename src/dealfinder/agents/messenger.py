@@ -243,19 +243,27 @@ class MessengerAgent:
             message: Notification body.
 
         Returns:
-            True if at least one channel sent successfully; False otherwise.
+            True if at least one channel sent successfully, or if no active users
+            are eligible for any channel; False if eligible users exist but every
+            channel attempt failed (caller should retry).
         """
         async with get_async_session() as session:
             user_repo = UserRepository(session)
             users = await user_repo.find_active_users()
 
+        eligible_count = 0
         any_sent = False
         loop = asyncio.get_running_loop()
 
         for user in users:
             prefs = user.notification_preferences or {}
+            want_pushover = bool(user.pushover_user_key and prefs.get("pushover", True) and self._pushover)
+            want_email = bool(user.email and prefs.get("email", False) and self._ses)
+            if not want_pushover and not want_email:
+                continue
+            eligible_count += 1
 
-            if user.pushover_user_key and prefs.get("pushover", True) and self._pushover:
+            if want_pushover:
                 notif = Notification(
                     user_id=user.id,
                     deal_id=deal.id,
@@ -282,7 +290,7 @@ class MessengerAgent:
                         nr = NotificationRepository(session)
                         await nr.mark_as_failed(notif.id, error_message=str(exc))
 
-            if user.email and prefs.get("email", False) and self._ses:
+            if want_email:
                 notif_email = Notification(
                     user_id=user.id,
                     deal_id=deal.id,
@@ -309,6 +317,8 @@ class MessengerAgent:
                         nr = NotificationRepository(session)
                         await nr.mark_as_failed(notif_email.id, error_message=str(exc))
 
+        if eligible_count == 0:
+            return True  # no eligible users — not a channel failure, treat as success
         return any_sent
 
     async def notify_deal(self, deal_id: UUID) -> dict:

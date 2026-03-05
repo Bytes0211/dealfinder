@@ -42,4 +42,4 @@ app.include_router(users.router, prefix="/api/v1")
 
 
 # AWS Lambda entry point — Mangum translates API Gateway events to ASGI
-handler = Mangum(app, lifespan="off")
+handler = Mangum(app, lifespan="auto")

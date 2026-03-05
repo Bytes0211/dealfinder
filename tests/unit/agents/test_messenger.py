@@ -190,6 +190,41 @@ class TestMessengerAgentIsDuplicate:
 
 
 # ─────────────────────────────────────────────
+# MessengerAgent._dispatch_to_user
+# ─────────────────────────────────────────────
+
+
+class TestDispatchToUser:
+    """Tests for MessengerAgent._dispatch_to_user."""
+
+    async def test_returns_true_when_no_eligible_users(self) -> None:
+        """When no active users have any eligible channel, return True (not a channel failure)."""
+        config = _make_config()  # no pushover token or SES sender — both channels unavailable
+        agent = MessengerAgent(config=config)
+
+        mock_user = MagicMock()
+        mock_user.pushover_user_key = None
+        mock_user.email = "test@example.com"
+        mock_user.notification_preferences = {"email": False, "pushover": False}
+
+        mock_repo = AsyncMock()
+        mock_repo.find_active_users.return_value = [mock_user]
+
+        mock_session = AsyncMock()
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+
+        deal = _make_deal()
+        with (
+            patch("dealfinder.agents.messenger.get_async_session", return_value=mock_session),
+            patch("dealfinder.agents.messenger.UserRepository", return_value=mock_repo),
+        ):
+            result = await agent._dispatch_to_user(deal, "Title", "Message")
+
+        assert result is True
+
+
+# ─────────────────────────────────────────────
 # MessengerAgent.notify_deal
 # ─────────────────────────────────────────────
 
