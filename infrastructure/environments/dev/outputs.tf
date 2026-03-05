@@ -85,6 +85,22 @@ output "aurora_security_group_id" {
   value       = var.enable_aurora ? module.aurora[0].security_group_id : null
 }
 
+# API outputs (Phase 4)
+output "api_endpoint" {
+  description = "Base URL of the API Gateway HTTP API"
+  value       = module.api.api_endpoint
+}
+
+output "cognito_client_id" {
+  description = "Cognito user pool client ID"
+  value       = module.api.cognito_client_id
+}
+
+output "cognito_hosted_ui_domain" {
+  description = "Cognito Hosted UI domain"
+  value       = module.api.cognito_hosted_ui_domain
+}
+
 # Frontend outputs (Phase 6)
 output "frontend_bucket_name" {
   description = "S3 bucket name for the React frontend"

@@ -202,6 +202,11 @@ module "api" {
   tavily_api_key = var.tavily_api_key
   sns_topic_arn  = module.notifications.sns_topic_arn
 
+  # Cognito Hosted UI
+  cognito_domain_prefix = "dealfinder-dev"
+  cognito_callback_urls = ["https://d3m3flgtpjwfg2.cloudfront.net/auth/callback", "http://localhost:5173/auth/callback"]
+  cognito_logout_urls   = ["https://d3m3flgtpjwfg2.cloudfront.net/login", "http://localhost:5173/login"]
+
   tags = local.common_tags
 }
 
