@@ -1,0 +1,46 @@
+import { Link } from 'react-router-dom';
+import type { DealResponse } from '../api/types';
+
+interface Props {
+  deal: DealResponse;
+}
+
+function fmt(val: string | null, prefix = '$'): string {
+  return val ? `${prefix}${parseFloat(val).toFixed(2)}` : '—';
+}
+
+export function DealCard({ deal }: Props) {
+  return (
+    <div className={`deal-card${deal.is_high_value ? ' deal-card--hot' : ''}`}>
+      <div className="deal-card-header">
+        <Link to={`/deals/${deal.id}`} className="deal-title">{deal.title}</Link>
+        {deal.is_high_value && <span className="badge badge--hot">🔥 Hot Deal</span>}
+      </div>
+
+      <div className="deal-card-meta">
+        {deal.category && <span className="tag">{deal.category}</span>}
+        {deal.brand && <span className="tag">{deal.brand}</span>}
+        {deal.source_name && <span className="tag tag--muted">{deal.source_name}</span>}
+      </div>
+
+      <div className="deal-card-prices">
+        <span className="price price--sale">{fmt(deal.sale_price)}</span>
+        {deal.original_price && (
+          <span className="price price--original">{fmt(deal.original_price)}</span>
+        )}
+        {deal.discount_percentage && (
+          <span className="badge badge--discount">
+            {parseFloat(deal.discount_percentage).toFixed(0)}% off
+          </span>
+        )}
+      </div>
+
+      <div className="deal-card-footer">
+        <span className={`status status--${deal.status}`}>{deal.status}</span>
+        <a href={deal.url} target="_blank" rel="noopener noreferrer" className="btn btn-sm">
+          View Deal ↗
+        </a>
+      </div>
+    </div>
+  );
+}
