@@ -87,6 +87,12 @@ variable "alarm_sns_topic_arn" {
   default     = ""
 }
 
+variable "cors_allowed_origins" {
+  description = "List of allowed CORS origins for the API Gateway. Defaults to wildcard."
+  type        = list(string)
+  default     = ["*"]
+}
+
 variable "tags" {
   description = "Resource tags"
   type        = map(string)

@@ -54,9 +54,9 @@ resource "aws_cognito_user_pool_client" "api" {
     "ALLOW_REFRESH_TOKEN_AUTH",
   ]
 
-  access_token_validity  = 60  # minutes
-  id_token_validity      = 60  # minutes
-  refresh_token_validity = 30  # days
+  access_token_validity  = 60 # minutes
+  id_token_validity      = 60 # minutes
+  refresh_token_validity = 30 # days
 
   token_validity_units {
     access_token  = "minutes"
@@ -118,9 +118,9 @@ resource "aws_iam_role_policy" "api_inline" {
         Resource = "${aws_cloudwatch_log_group.api.arn}:*"
       },
       {
-        Sid    = "SecretsManager"
-        Effect = "Allow"
-        Action = ["secretsmanager:GetSecretValue"]
+        Sid      = "SecretsManager"
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
         Resource = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/${var.environment}/*"
       },
     ]
@@ -186,7 +186,7 @@ resource "aws_apigatewayv2_api" "main" {
   description   = "Deal Finder REST API"
 
   cors_configuration {
-    allow_origins = ["*"]
+    allow_origins = var.cors_allowed_origins
     allow_methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
     allow_headers = ["Content-Type", "Authorization"]
     max_age       = 300
