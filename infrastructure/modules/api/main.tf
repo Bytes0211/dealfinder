@@ -30,7 +30,6 @@ resource "aws_cognito_user_pool" "main" {
 
   email_configuration {
     email_sending_account = "COGNITO_DEFAULT"
-    from_email_address    = "DealFinder <no-reply@verificationemail.com>"
   }
 
   schema {
