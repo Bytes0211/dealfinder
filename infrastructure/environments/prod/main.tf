@@ -2,11 +2,11 @@ terraform {
   required_version = ">= 1.14"
 
   backend "s3" {
-    bucket         = "dealfinder-terraform-state-prod"
-    key            = "prod/terraform.tfstate"
-    region         = "us-east-1"
-    encrypt        = true
-    dynamodb_table = "dealfinder-terraform-locks"
+    bucket       = "dealfinder-terraform-state-prod"
+    key          = "prod/terraform.tfstate"
+    region       = "us-east-1"
+    encrypt      = true
+    use_lockfile = true
   }
 
   required_providers {
