@@ -204,6 +204,7 @@ resource "aws_cloudwatch_metric_alarm" "s3_storage_size" {
 
 # Cost Anomaly Detection
 resource "aws_ce_anomaly_monitor" "dealfinder" {
+  count             = var.create_cost_anomaly_monitor ? 1 : 0
   name              = "${var.project_name}-${var.environment}-cost-monitor"
   monitor_type      = "DIMENSIONAL"
   monitor_dimension = "SERVICE"
@@ -212,11 +213,12 @@ resource "aws_ce_anomaly_monitor" "dealfinder" {
 }
 
 resource "aws_ce_anomaly_subscription" "dealfinder" {
+  count     = var.create_cost_anomaly_monitor ? 1 : 0
   name      = "${var.project_name}-${var.environment}-cost-anomaly"
   frequency = "DAILY"
 
   monitor_arn_list = [
-    aws_ce_anomaly_monitor.dealfinder.arn
+    aws_ce_anomaly_monitor.dealfinder[0].arn
   ]
 
   subscriber {

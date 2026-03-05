@@ -25,5 +25,5 @@ output "dashboard_name" {
 
 output "cost_anomaly_monitor_arn" {
   description = "ARN of the cost anomaly monitor"
-  value       = aws_ce_anomaly_monitor.dealfinder.arn
+  value       = var.create_cost_anomaly_monitor ? aws_ce_anomaly_monitor.dealfinder[0].arn : null
 }

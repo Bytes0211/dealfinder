@@ -82,6 +82,9 @@ module "cloudwatch" {
   log_retention_days = var.log_retention_days
   alarm_email        = var.alarm_email
 
+  # AWS allows only one DIMENSIONAL anomaly monitor per account; dev already owns it
+  create_cost_anomaly_monitor = false
+
   tags = local.common_tags
 }
 

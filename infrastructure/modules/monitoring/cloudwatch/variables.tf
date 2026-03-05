@@ -25,6 +25,12 @@ variable "alarm_email" {
   default     = ""
 }
 
+variable "create_cost_anomaly_monitor" {
+  description = "Whether to create a Cost Explorer anomaly monitor (AWS allows only one DIMENSIONAL monitor per account)"
+  type        = bool
+  default     = true
+}
+
 variable "tags" {
   description = "Common tags to apply to all resources"
   type        = map(string)
