@@ -87,6 +87,18 @@ class UserCreate(BaseModel):
     full_name: Optional[str] = None
 
 
+class SavedFeed(BaseModel):
+    """A single saved feed filter entry.
+
+    Attributes:
+        category: Category or subcategory value to filter by.
+        status: Deal status filter (empty string means all statuses).
+    """
+
+    category: str
+    status: str = ""
+
+
 class UserPreferencesUpdate(BaseModel):
     """Request body for updating notification preferences.
 
@@ -95,12 +107,14 @@ class UserPreferencesUpdate(BaseModel):
         discount_threshold: Minimum discount to trigger a notification.
         preferred_categories: Categories the user is interested in.
         pushover_user_key: Pushover user key for push notifications.
+        saved_feeds: User's saved feed filters for the Feed page UI.
     """
 
     notification_preferences: Optional[dict] = None
     discount_threshold: Optional[Decimal] = Field(None, ge=0, le=100)
     preferred_categories: Optional[list[str]] = None
     pushover_user_key: Optional[str] = None
+    saved_feeds: Optional[list[SavedFeed]] = None
 
 
 class UserResponse(BaseModel):
@@ -114,6 +128,7 @@ class UserResponse(BaseModel):
         is_active: Whether the account is active.
         discount_threshold: User's personal notification threshold.
         preferred_categories: List of preferred categories.
+        notification_preferences: JSONB preferences dict (includes saved_feeds).
     """
 
     id: UUID
@@ -123,5 +138,6 @@ class UserResponse(BaseModel):
     is_active: bool
     discount_threshold: Decimal
     preferred_categories: Optional[list] = None
+    notification_preferences: Optional[dict] = None
 
     model_config = {"from_attributes": True}

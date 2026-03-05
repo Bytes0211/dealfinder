@@ -1,12 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getDeal, listDeals, topDeals } from '../api/deals';
-import { updatePreferences } from '../api/users';
+import { getUserPreferences, updatePreferences } from '../api/users';
 import type { DealFilters, UserPreferencesUpdate } from '../api/types';
 
-export function useDeals(filters: DealFilters = {}) {
+export function useDeals(filters: DealFilters = {}, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['deals', filters],
     queryFn: () => listDeals(filters),
+    enabled: options?.enabled,
   });
 }
 
@@ -22,6 +23,15 @@ export function useDeal(id: string) {
     queryKey: ['deals', id],
     queryFn: () => getDeal(id),
     enabled: !!id,
+  });
+}
+
+export function useUserPreferences(userId: string) {
+  return useQuery({
+    queryKey: ['user', userId],
+    queryFn: () => getUserPreferences(userId),
+    enabled: !!userId,
+    staleTime: 60_000, // cache for 1 minute
   });
 }
 

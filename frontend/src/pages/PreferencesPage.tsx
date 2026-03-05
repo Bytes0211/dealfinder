@@ -1,22 +1,22 @@
 import { useState } from 'react';
 import { getUserId } from '../auth';
 import { useUpdatePreferences } from '../hooks';
+import { CategoryTagInput } from '../components/CategoryTagInput';
+import { InfoTooltip } from '../components/InfoTooltip';
 
 export function PreferencesPage() {
   const userId = getUserId() ?? '';
   const { mutate, isPending, isSuccess, isError } = useUpdatePreferences(userId);
 
   const [discountThreshold, setDiscountThreshold] = useState('');
-  const [categories, setCategories] = useState('');
+  const [categories, setCategories] = useState<string[]>([]);
   const [pushoverKey, setPushoverKey] = useState('');
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     mutate({
       discount_threshold: discountThreshold || null,
-      preferred_categories: categories
-        ? categories.split(',').map((s) => s.trim()).filter(Boolean)
-        : null,
+      preferred_categories: categories.length > 0 ? categories : null,
       pushover_user_key: pushoverKey || null,
     });
   }
@@ -41,19 +41,13 @@ export function PreferencesPage() {
           />
         </label>
 
-        <label className="form-label">
-          Preferred Categories (comma-separated)
-          <input
-            type="text"
-            value={categories}
-            onChange={(e) => setCategories(e.target.value)}
-            placeholder="e.g. Electronics, Clothing"
-            className="form-input"
-          />
-        </label>
+        <CategoryTagInput value={categories} onChange={setCategories} />
 
         <label className="form-label">
-          Pushover User Key
+          <span className="form-label-row">
+            Pushover User Key
+            <InfoTooltip text="Your personal Pushover User Key, found on your dashboard at pushover.net. The app uses it to send deal alerts directly to your phone or device via the Pushover app." />
+          </span>
           <input
             type="text"
             value={pushoverKey}
