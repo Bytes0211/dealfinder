@@ -6,6 +6,7 @@ for execution as an AWS Lambda function behind API Gateway.
 """
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -25,13 +26,15 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("Deal Finder API shutting down")
 
 
+_is_dev = os.getenv("ENVIRONMENT", "dev") == "dev"
+
 app = FastAPI(
     title="Deal Finder API",
     description="AI-powered deal discovery system — REST API",
     version="0.4.0",
-    docs_url="/api/v1/docs",
-    redoc_url="/api/v1/redoc",
-    openapi_url="/api/v1/openapi.json",
+    docs_url="/api/v1/docs" if _is_dev else None,
+    redoc_url="/api/v1/redoc" if _is_dev else None,
+    openapi_url="/api/v1/openapi.json" if _is_dev else None,
     lifespan=lifespan,
 )
 

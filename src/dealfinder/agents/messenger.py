@@ -231,7 +231,7 @@ class MessengerAgent:
         deal: Deal,
         title: str,
         message: str,
-    ) -> bool:
+    ) -> tuple[bool, int]:
         """Dispatch a notification to all eligible users.
 
         Iterates active users, filters by preference and available keys,
@@ -243,15 +243,17 @@ class MessengerAgent:
             message: Notification body.
 
         Returns:
-            True if at least one channel sent successfully, or if no active users
-            are eligible for any channel; False if eligible users exist but every
-            channel attempt failed (caller should retry).
+            Tuple of (success, channels_attempted) where success is True if at
+            least one send succeeded or no users were eligible, and
+            channels_attempted is the total number of per-channel send attempts
+            across all eligible users.
         """
         async with get_async_session() as session:
             user_repo = UserRepository(session)
             users = await user_repo.find_active_users()
 
         eligible_count = 0
+        channels_attempted = 0
         any_sent = False
         loop = asyncio.get_running_loop()
 
@@ -264,6 +266,7 @@ class MessengerAgent:
             eligible_count += 1
 
             if want_pushover:
+                channels_attempted += 1
                 notif = Notification(
                     user_id=user.id,
                     deal_id=deal.id,
@@ -291,6 +294,7 @@ class MessengerAgent:
                         await nr.mark_as_failed(notif.id, error_message=str(exc))
 
             if want_email:
+                channels_attempted += 1
                 notif_email = Notification(
                     user_id=user.id,
                     deal_id=deal.id,
@@ -318,8 +322,8 @@ class MessengerAgent:
                         await nr.mark_as_failed(notif_email.id, error_message=str(exc))
 
         if eligible_count == 0:
-            return True  # no eligible users — not a channel failure, treat as success
-        return any_sent
+            return True, 0  # no eligible users — not a channel failure, treat as success
+        return any_sent, channels_attempted
 
     async def notify_deal(self, deal_id: UUID) -> dict:
         """Process a single deal notification.
@@ -359,7 +363,7 @@ class MessengerAgent:
 
         title, message = await loop.run_in_executor(None, self._craft_message, deal)
 
-        any_sent = await self._dispatch_to_user(deal, title, message)
+        any_sent, channels_attempted = await self._dispatch_to_user(deal, title, message)
 
         if not any_sent:
             raise RuntimeError(
@@ -374,7 +378,7 @@ class MessengerAgent:
         return {
             "deal_id": str(deal_id),
             "status": "notified",
-            "channels_attempted": int(bool(self._pushover)) + int(bool(self._ses)),
+            "channels_attempted": channels_attempted,
         }
 
     async def run(self, event: dict, context: Any) -> dict:

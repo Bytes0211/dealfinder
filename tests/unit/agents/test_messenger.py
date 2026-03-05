@@ -221,7 +221,7 @@ class TestDispatchToUser:
         ):
             result = await agent._dispatch_to_user(deal, "Title", "Message")
 
-        assert result is True
+        assert result == (True, 0)
 
 
 # ─────────────────────────────────────────────
@@ -281,13 +281,14 @@ class TestMessengerAgentNotifyDeal:
         with (
             patch.object(agent, "_is_duplicate", return_value=False),
             patch.object(agent, "_craft_message", return_value=("Title", "Message")),
-            patch.object(agent, "_dispatch_to_user", new_callable=AsyncMock, return_value=True),
+            patch.object(agent, "_dispatch_to_user", new_callable=AsyncMock, return_value=(True, 2)),
             patch("dealfinder.agents.messenger.get_async_session", return_value=mock_session),
             patch("dealfinder.agents.messenger.DealRepository", return_value=mock_deal_repo),
         ):
             result = await agent.notify_deal(deal.id)
 
         assert result["status"] == "notified"
+        assert result["channels_attempted"] == 2
         mock_deal_repo.update_status.assert_called_once_with(deal.id, DealStatus.NOTIFIED)
 
     async def test_raises_when_all_channels_fail(self) -> None:
@@ -306,7 +307,7 @@ class TestMessengerAgentNotifyDeal:
         with (
             patch.object(agent, "_is_duplicate", return_value=False),
             patch.object(agent, "_craft_message", return_value=("Title", "Message")),
-            patch.object(agent, "_dispatch_to_user", new_callable=AsyncMock, return_value=False),
+            patch.object(agent, "_dispatch_to_user", new_callable=AsyncMock, return_value=(False, 2)),
             patch("dealfinder.agents.messenger.get_async_session", return_value=mock_session),
             patch("dealfinder.agents.messenger.DealRepository", return_value=mock_deal_repo),
         ):
