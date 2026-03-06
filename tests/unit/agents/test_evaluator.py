@@ -372,3 +372,42 @@ class TestEvaluatorAgentTransientErrors:
 
         assert result["status"] == "estimation_failed"
         assert result["is_high_value"] is False
+
+
+class TestEvaluatorMatchedFeedPairs:
+    """Tests for matched_feed_pairs in evaluate_deal return value."""
+
+    async def test_matched_feed_pairs_present_when_evaluated(
+        self, patch_async_session, deal_with_price: Deal, config: AgentConfig
+    ) -> None:
+        """Evaluated result always contains a matched_feed_pairs list.
+
+        With no notification_queue_url the list is empty; the key must still
+        be present so PipelineSummaryAgent can read it unconditionally.
+        """
+        estimator = _make_estimator(estimated_price=300.0, confidence=0.9)
+        agent = EvaluatorAgent(config=config, estimator=estimator)
+
+        result = await agent.evaluate_deal(deal_with_price.id)
+
+        assert result["status"] == "evaluated"
+        assert "matched_feed_pairs" in result
+        assert isinstance(result["matched_feed_pairs"], list)
+
+    async def test_matched_feed_pairs_empty_for_not_found(
+        self, patch_async_session, config: AgentConfig
+    ) -> None:
+        """not_found result must include an empty matched_feed_pairs list."""
+        agent = EvaluatorAgent(config=config, estimator=MagicMock())
+        result = await agent.evaluate_deal(uuid4())
+        assert result["status"] == "not_found"
+        assert result["matched_feed_pairs"] == []
+
+    async def test_matched_feed_pairs_empty_for_rejected(
+        self, patch_async_session, deal_no_price: Deal, config: AgentConfig
+    ) -> None:
+        """rejected result must include an empty matched_feed_pairs list."""
+        agent = EvaluatorAgent(config=config, estimator=MagicMock())
+        result = await agent.evaluate_deal(deal_no_price.id)
+        assert result["status"] == "rejected"
+        assert result["matched_feed_pairs"] == []

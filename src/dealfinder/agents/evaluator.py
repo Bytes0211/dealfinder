@@ -117,6 +117,7 @@ class EvaluatorAgent:
                     "discount_percentage": 0.0,
                     "estimated_value": 0.0,
                     "confidence": 0.0,
+                    "matched_feed_pairs": [],
                 }
 
             await deal_repo.update_status(deal_id, DealStatus.EVALUATING)
@@ -132,6 +133,7 @@ class EvaluatorAgent:
                     "discount_percentage": 0.0,
                     "estimated_value": 0.0,
                     "confidence": 0.0,
+                    "matched_feed_pairs": [],
                 }
 
             try:
@@ -158,6 +160,7 @@ class EvaluatorAgent:
                     "discount_percentage": 0.0,
                     "estimated_value": 0.0,
                     "confidence": 0.0,
+                    "matched_feed_pairs": [],
                 }
             except Exception as e:
                 logger.error(f"Bedrock estimation failed for deal {deal_id}: {e}")
@@ -169,6 +172,7 @@ class EvaluatorAgent:
                     "discount_percentage": 0.0,
                     "estimated_value": 0.0,
                     "confidence": 0.0,
+                    "matched_feed_pairs": [],
                 }
 
             estimate = PriceEstimate(
@@ -212,8 +216,11 @@ class EvaluatorAgent:
             )
 
         # Match evaluated deal against all users' watchlist feeds and notify
+        matched_feed_pairs: list[dict] = []
         if is_high_value or discount > 0:
-            await self._notify_watchlist_matches(deal_id, updated_deal, discount)
+            matched_feed_pairs = await self._notify_watchlist_matches(
+                deal_id, updated_deal, discount
+            )
 
         return {
             "deal_id": str(deal_id),
@@ -222,6 +229,7 @@ class EvaluatorAgent:
             "discount_percentage": float(discount),
             "estimated_value": float(result.estimated_price),
             "confidence": float(result.confidence),
+            "matched_feed_pairs": matched_feed_pairs,
         }
 
     async def _notify_watchlist_matches(
@@ -229,21 +237,28 @@ class EvaluatorAgent:
         deal_id: UUID,
         deal: Deal,
         discount: Decimal,
-    ) -> None:
+    ) -> list[dict]:
         """Enqueue notifications for users whose watchlist feeds match this deal.
 
         Scans all active users' ``notification_preferences.saved_feeds`` for
         entries whose ``query`` keywords appear in the deal title AND whose
-        ``min_discount`` threshold is met. Matching users have a notification
-        message enqueued to the SQS dispatch queue.
+        ``min_discount`` threshold is met.  All matching ``{user_id, feed_id,
+        feed_name}`` pairs are recorded; a single deal-notification SQS message
+        is enqueued if at least one user matched.  The full list of matched pairs
+        is returned so ``PipelineSummaryAgent`` can identify which feeds produced
+        a result this run.
 
         Args:
             deal_id: UUID of the evaluated deal.
             deal: Evaluated Deal instance.
             discount: Calculated discount percentage.
+
+        Returns:
+            List of dicts with ``user_id``, ``feed_id``, and ``feed_name`` for
+            every (user, feed) pair that matched this deal.
         """
         if not self.config.notification_queue_url:
-            return
+            return []
 
         try:
             async with get_async_session() as session:
@@ -251,10 +266,11 @@ class EvaluatorAgent:
                 users = await user_repo.find_active_users()
         except Exception as exc:
             logger.warning(f"Watchlist match: failed to load users: {exc}")
-            return
+            return []
 
         deal_title_lower = deal.title.lower()
-        matched_user_ids: list[str] = []
+        matched_feed_pairs: list[dict] = []
+        notified_user_ids: set[str] = set()
 
         for user in users:
             prefs = user.notification_preferences or {}
@@ -267,14 +283,20 @@ class EvaluatorAgent:
                 keywords = [w for w in query_str.split() if len(w) > 2][:3]
                 if any(kw in deal_title_lower for kw in keywords):
                     if float(discount) >= min_discount:
-                        matched_user_ids.append(str(user.id))
-                        break  # one match per user is enough
+                        matched_feed_pairs.append({
+                            "user_id": str(user.id),
+                            "feed_id": feed.get("id", ""),
+                            "feed_name": feed.get("query", ""),
+                        })
+                        notified_user_ids.add(str(user.id))
+                        # Continue to collect all matching feeds for this user
 
-        if not matched_user_ids:
-            return
+        if not notified_user_ids:
+            return []
 
         logger.info(
-            f"Watchlist match: deal {deal_id} matched {len(matched_user_ids)} users — enqueuing"
+            f"Watchlist match: deal {deal_id} matched {len(notified_user_ids)} user(s), "
+            f"{len(matched_feed_pairs)} feed pair(s) — enqueuing"
         )
 
         loop = asyncio.get_running_loop()
@@ -290,6 +312,8 @@ class EvaluatorAgent:
             )
         except Exception as exc:
             logger.error(f"Watchlist match: failed to enqueue notification for deal {deal_id}: {exc}")
+
+        return matched_feed_pairs
 
     async def run(self, event: dict) -> dict:
         """Process a Step Functions evaluation event.

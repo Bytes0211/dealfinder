@@ -1,13 +1,11 @@
 """PipelineSummaryAgent Lambda function for post-pipeline result checking.
 
 After the Step Functions ``ProcessDeals`` Map state completes, this Lambda
-inspects the ``evaluated_deals`` array.  If no deal is high-value — including
-the case where the scanner found zero new deals — it publishes a ``no_deals``
-event to the notification dispatch SQS queue.
-
-A 24-hour rolling DynamoDB dedup key (``"no-deals-notif"``) prevents the
-notification from being sent more than once per quiet window.  The 24-hour
-clock starts from when the first notification fires, not at midnight.
+aggregates ``matched_feed_pairs`` from all evaluated deals and enqueues a
+per-feed ``no_deals_feed`` notification for every active user whose saved
+feed did *not* produce a deal match this run.  A 24-hour rolling DynamoDB
+dedup key per (user, feed) pair prevents repeat notifications within one
+quiet window.
 """
 
 import asyncio
@@ -20,23 +18,22 @@ import boto3
 from botocore.exceptions import ClientError
 
 from dealfinder.agents.config import AgentConfig
+from dealfinder.data.repository import UserRepository
+from dealfinder.db.connection import get_async_session
 
 logger = logging.getLogger(__name__)
 
-_DEDUP_KEY = "no-deals-notif"
 _DEDUP_TTL_SECONDS = 86_400  # 24 hours — rolling from first notification
 
 
 class PipelineSummaryAgent:
-    """Checks pipeline results and notifies users when no high-value deals were found.
+    """Checks pipeline results and sends per-feed no-deals notifications.
 
-    Receives the full Step Functions context after the ``ProcessDeals`` Map
-    state and checks whether any evaluated deal has ``is_high_value=True``.
-    Both cases — zero new deals discovered and deals evaluated but none
-    high-value — are handled by the same ``any()`` check on the results array.
-
-    A DynamoDB conditional write acts as a rolling 24-hour debounce so users
-    receive at most one "no deals found" notification per quiet window.
+    After the ``ProcessDeals`` Map state, aggregates ``matched_feed_pairs``
+    from all evaluated deals.  For each active user whose saved feeds did
+    *not* produce a match this run, a per-feed "still searching"
+    notification is dispatched via SQS (subject to 24-hour dedup per
+    (user, feed) pair).
 
     Example:
         agent = PipelineSummaryAgent()
@@ -69,16 +66,19 @@ class PipelineSummaryAgent:
             self._sqs = boto3.client("sqs", region_name=self.config.bedrock_region)
         return self._sqs
 
-    def _should_notify(self) -> bool:
-        """Attempt to write the dedup key; return True if notification should be sent.
+    def _check_and_set_dedup(self, dedup_key: str) -> bool:
+        """Attempt a conditional DynamoDB write for a per-feed dedup key.
 
-        Uses a conditional DynamoDB ``put_item`` so the check-and-set is atomic.
-        If the key already exists within the 24-hour window the notification is
-        suppressed.  Fails open: if DynamoDB is unavailable the notification is sent.
+        Uses a conditional ``put_item`` so the check-and-set is atomic.
+        Returns True (notify) if the key was absent; False (suppress) if it
+        already exists within the 24-hour window.  Fails open so users are
+        notified when DynamoDB is unavailable.
+
+        Args:
+            dedup_key: DynamoDB partition key for this (user, feed) notification.
 
         Returns:
-            True if the dedup key was absent (first notification this window).
-            False if the key already exists (within the 24-hour window).
+            True if the notification should be sent, False if suppressed.
         """
         if not self.config.dedup_table_name:
             return True  # no dedup table configured — always notify
@@ -87,85 +87,152 @@ class PipelineSummaryAgent:
             table = self.dynamodb.Table(self.config.dedup_table_name)
             expires_at = int(time.time()) + _DEDUP_TTL_SECONDS
             table.put_item(
-                Item={"pk": _DEDUP_KEY, "expires_at": expires_at},
+                Item={"pk": dedup_key, "expires_at": expires_at},
                 ConditionExpression="attribute_not_exists(pk)",
             )
             return True  # write succeeded — first notification this window
         except ClientError as e:
             if e.response["Error"]["Code"] == "ConditionalCheckFailedException":
-                logger.info(
-                    "No-deals dedup: notification suppressed within 24-hour window"
+                logger.debug(
+                    f"Dedup key {dedup_key!r} within 24h window — suppressed"
                 )
                 return False
             logger.warning(
-                f"DynamoDB dedup check failed: {e} — proceeding with notification"
+                f"DynamoDB dedup check failed for {dedup_key!r}: {e} "
+                "— proceeding with notification"
             )
             return True  # fail open
 
-    def _enqueue_no_deals(self, timestamp: str, sources_scanned: int) -> None:
-        """Publish a ``no_deals`` event to the notification dispatch SQS queue.
+    def _enqueue_no_deals_feed(
+        self,
+        user_id: str,
+        feed_id: str,
+        feed_name: str,
+        timestamp: str,
+    ) -> None:
+        """Publish a ``no_deals_feed`` event to the notification dispatch SQS queue.
 
         Args:
-            timestamp: ISO-8601 scan timestamp from the scanner (``scanned_at``).
-            sources_scanned: Number of RSS sources scanned this pipeline run.
+            user_id: String UUID of the user to notify.
+            feed_id: Saved-feed entry identifier.
+            feed_name: Human-readable feed label (the saved feed query string).
+            timestamp: ISO-8601 scan timestamp from the scanner.
         """
         if not self.config.notification_queue_url:
             logger.warning(
-                "No notification_queue_url configured — cannot enqueue no_deals message"
+                "No notification_queue_url configured — cannot enqueue no_deals_feed message"
             )
             return
 
         message = json.dumps({
-            "event_type": "no_deals",
+            "event_type": "no_deals_feed",
+            "user_id": user_id,
+            "feed_id": feed_id,
+            "feed_name": feed_name,
             "timestamp": timestamp,
-            "sources_scanned": sources_scanned,
         })
         self.sqs.send_message(
             QueueUrl=self.config.notification_queue_url,
             MessageBody=message,
         )
-        logger.info(f"Enqueued no_deals notification for timestamp {timestamp}")
+        logger.info(
+            f"Enqueued no_deals_feed notification for user {user_id}, feed '{feed_name}'"
+        )
 
-    async def run(self, event: dict) -> dict:
-        """Check pipeline results and conditionally enqueue a no-deals notification.
+    async def _check_unmatched_feeds(
+        self,
+        matched_pairs: list[dict],
+        scanned_at: str,
+    ) -> None:
+        """Enqueue per-feed no-deals notifications for unmatched user feeds.
 
-        If at least one evaluated deal has ``is_high_value=True``, no action is
-        taken.  Otherwise the 24-hour dedup key is checked; if absent, a
-        ``no_deals`` SQS message is published for the Messenger Agent to deliver.
+        Loads all active users, builds the set of ``(user_id, feed_id)`` pairs
+        that produced at least one deal match this pipeline run, then for each
+        unmatched ``(user_id, feed_id)`` pair checks a rolling 24-hour dedup
+        key and, if absent, enqueues a ``no_deals_feed`` SQS message.
 
         Args:
-            event: Step Functions context containing ``evaluated_deals`` list,
-                ``scanned_at`` ISO-8601 timestamp, and ``sources_scanned`` count.
+            matched_pairs: List of ``{user_id, feed_id, feed_name}`` dicts
+                collected from all evaluated deals this run.
+            scanned_at: ISO-8601 scan timestamp.
+        """
+        if not self.config.notification_queue_url:
+            return
+
+        try:
+            async with get_async_session() as session:
+                user_repo = UserRepository(session)
+                users = await user_repo.find_active_users()
+        except Exception as exc:
+            logger.warning(f"_check_unmatched_feeds: failed to load users: {exc}")
+            return
+
+        matched_set: set[tuple[str, str]] = {
+            (p["user_id"], p["feed_id"]) for p in matched_pairs
+        }
+        loop = asyncio.get_running_loop()
+
+        for user in users:
+            prefs = user.notification_preferences or {}
+            saved_feeds: list[dict] = prefs.get("saved_feeds", []) or []
+            for feed in saved_feeds:
+                feed_id = feed.get("id", "")
+                feed_name = feed.get("query", "")
+                if not feed_id:
+                    continue
+
+                user_id = str(user.id)
+                if (user_id, feed_id) in matched_set:
+                    continue  # this feed produced a deal this run
+
+                dedup_key = f"no-deals-feed#{user_id}#{feed_id}"
+                # Capture loop variables to avoid late-binding in lambdas
+                _key = dedup_key
+                _uid, _fid, _fn, _ts = user_id, feed_id, feed_name, scanned_at
+                should_notify = await loop.run_in_executor(
+                    None, lambda k=_key: self._check_and_set_dedup(k)
+                )
+                if should_notify:
+                    await loop.run_in_executor(
+                        None,
+                        lambda uid=_uid, fid=_fid, fn=_fn, ts=_ts: (
+                            self._enqueue_no_deals_feed(
+                                user_id=uid,
+                                feed_id=fid,
+                                feed_name=fn,
+                                timestamp=ts,
+                            )
+                        ),
+                    )
+
+    async def run(self, event: dict) -> dict:
+        """Check pipeline results and enqueue per-feed no-deals notifications.
+
+        Aggregates ``matched_feed_pairs`` from all evaluated deals then calls
+        ``_check_unmatched_feeds`` to dispatch "still searching" messages for
+        any ``(user, feed)`` pair that did not produce a deal match this run.
+
+        Args:
+            event: Step Functions context containing ``evaluated_deals`` list
+                and ``scanned_at`` ISO-8601 timestamp.
 
         Returns:
             The input event unchanged (Step Functions ``ResultPath=null``).
         """
         evaluated_deals: list[dict] = event.get("evaluated_deals", [])
         scanned_at: str = event.get("scanned_at", "")
-        sources_scanned: int = event.get("sources_scanned", 0)
 
-        has_high_value = any(d.get("is_high_value") for d in evaluated_deals)
+        matched_pairs: list[dict] = []
+        for deal in evaluated_deals:
+            matched_pairs.extend(deal.get("matched_feed_pairs", []))
 
-        if has_high_value:
-            high_value_count = sum(1 for d in evaluated_deals if d.get("is_high_value"))
-            logger.info(
-                f"Pipeline had {high_value_count} high-value deal(s) — no notification needed"
-            )
-            return event
-
+        high_value_count = sum(1 for d in evaluated_deals if d.get("is_high_value"))
         logger.info(
-            f"No high-value deals found (evaluated {len(evaluated_deals)}, "
-            f"scanned {sources_scanned} sources) — checking dedup"
+            f"Pipeline summary: {high_value_count} high-value deal(s) across "
+            f"{len(evaluated_deals)} evaluated, {len(matched_pairs)} matched feed pair(s)"
         )
 
-        loop = asyncio.get_running_loop()
-        should_notify = await loop.run_in_executor(None, self._should_notify)
-
-        if should_notify:
-            await loop.run_in_executor(
-                None, lambda: self._enqueue_no_deals(scanned_at, sources_scanned)
-            )
-
+        await self._check_unmatched_feeds(matched_pairs, scanned_at)
         return event
 
 

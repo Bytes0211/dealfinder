@@ -401,9 +401,17 @@ class MessengerAgent:
             timestamp: ISO-8601 scan timestamp from the pipeline's ``scanned_at`` field.
             sources_scanned: Number of RSS sources scanned in this pipeline run.
         """
+        from datetime import datetime, timezone
+
+        try:
+            dt = datetime.fromisoformat(timestamp).astimezone(timezone.utc)
+            readable_time = dt.strftime("%b %-d, %Y %-I:%M %p UTC")
+        except (ValueError, OSError):
+            readable_time = timestamp  # fall back to raw ISO string
+
         title = "No Deals Found"
         message = (
-            f"Scanned {sources_scanned} source(s) at {timestamp} — "
+            f"Scanned {sources_scanned} source(s) at {readable_time} — "
             "no high-value deals discovered."
         )
         loop = asyncio.get_running_loop()
@@ -435,6 +443,71 @@ class MessengerAgent:
                     logger.info(f"Sent no-deals email to {user.email}")
                 except Exception as exc:
                     logger.error(f"SES send failed for {user.email} (no_deals): {exc}")
+
+    async def notify_no_deals_feed(
+        self,
+        user_id: str,
+        feed_name: str,
+        timestamp: str,
+    ) -> None:
+        """Send a per-feed 'no deals found' notification via SES.
+
+        Looks up the user by ID, checks that they have email notifications
+        enabled, and sends a single SES email.  Skips silently when SES is not
+        configured, the user is not found, or email notifications are disabled.
+
+        Args:
+            user_id: String UUID of the user to notify.
+            feed_name: Human-readable feed label (the saved feed query string).
+            timestamp: ISO-8601 scan timestamp from the pipeline.
+        """
+        from datetime import datetime, timezone
+        from uuid import UUID as _UUID
+
+        try:
+            dt = datetime.fromisoformat(timestamp).astimezone(timezone.utc)
+            readable_time = dt.strftime("%b %-d, %Y %-I:%M %p UTC")
+        except (ValueError, OSError):
+            readable_time = timestamp
+
+        if not self._ses:
+            logger.debug("notify_no_deals_feed: SES not configured — skipping")
+            return
+
+        try:
+            async with get_async_session() as session:
+                user_repo = UserRepository(session)
+                user = await user_repo.get_by_id(_UUID(user_id))
+        except Exception as exc:
+            logger.warning(f"notify_no_deals_feed: failed to load user {user_id}: {exc}")
+            return
+
+        if not user:
+            logger.warning(f"notify_no_deals_feed: user {user_id} not found")
+            return
+
+        prefs = user.notification_preferences or {}
+        if not (user.email and prefs.get("email", False)):
+            logger.debug(
+                f"notify_no_deals_feed: user {user_id} has no email notifications configured"
+            )
+            return
+
+        title = f"No Deals Found \u2014 {feed_name}"
+        message = f"No deals found for '{feed_name}' at {readable_time} \u2014 still searching!"
+        loop = asyncio.get_running_loop()
+        try:
+            await loop.run_in_executor(
+                None, self._ses.send_email, user.email, title, message
+            )
+            logger.info(
+                f"Sent no_deals_feed email to {user.email} for feed '{feed_name}'"
+            )
+        except Exception as exc:
+            logger.error(
+                f"SES send failed for user {user_id} "
+                f"(no_deals_feed, feed='{feed_name}'): {exc}"
+            )
 
     async def run(self, event: dict, context: Any) -> dict:
         """Process an SQS batch event from the notification_dispatch queue.
@@ -470,6 +543,20 @@ class MessengerAgent:
                     )
                 except Exception as exc:
                     logger.error(f"notify_no_deals failed (record {message_id}): {exc}")
+                    batch_item_failures.append({"itemIdentifier": message_id})
+                continue
+
+            if body.get("event_type") == "no_deals_feed":
+                try:
+                    await self.notify_no_deals_feed(
+                        user_id=body.get("user_id", ""),
+                        feed_name=body.get("feed_name", ""),
+                        timestamp=body.get("timestamp", ""),
+                    )
+                except Exception as exc:
+                    logger.error(
+                        f"notify_no_deals_feed failed (record {message_id}): {exc}"
+                    )
                     batch_item_failures.append({"itemIdentifier": message_id})
                 continue
 

@@ -216,6 +216,12 @@ resource "aws_iam_role_policy" "pipeline_summary_inline" {
         ]
         Resource = aws_dynamodb_table.pipeline_dedup.arn
       },
+      {
+        Sid      = "SecretsManager"
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/${var.environment}/*"
+      },
     ]
   })
 }
@@ -389,6 +395,9 @@ resource "aws_lambda_function" "pipeline_summary" {
       DEALFINDER_BEDROCK_REGION         = var.aws_region
       DEALFINDER_NOTIFICATION_QUEUE_URL = aws_sqs_queue.notification_dispatch.url
       DEALFINDER_DEDUP_TABLE_NAME       = aws_dynamodb_table.pipeline_dedup.name
+      DB_HOST                           = var.db_host
+      DB_NAME                           = var.db_name
+      DB_SECRET_ARN                     = var.db_secret_arn
     }
   }
 

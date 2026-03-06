@@ -444,6 +444,8 @@ class TestNotifyNoDeals:
         title, message = mock_sns.publish.call_args[0]
         assert title == "No Deals Found"
         assert "3 source(s)" in message
+        assert "Mar 6, 2026" in message  # human-readable timestamp
+        assert "+00:00" not in message  # ISO format not exposed to user
 
     async def test_no_sns_call_when_not_configured(self) -> None:
         """With no sns_topic_arn, SNS publish should not be called and no error raised."""
@@ -544,3 +546,213 @@ class TestMessengerRunNoDealsRouting:
         assert result["batchItemFailures"] == []
         mock_deal.assert_awaited_once()
         mock_no_deals.assert_awaited_once()
+
+
+# ─────────────────────────────────────────────
+# MessengerAgent.notify_no_deals_feed
+# ─────────────────────────────────────────────
+
+
+class TestNotifyNoDealsFeed:
+    """Tests for MessengerAgent.notify_no_deals_feed."""
+
+    def _make_mock_user(self, email: str = "user@example.com", email_enabled: bool = True):
+        """Return a mock User with optional email notification preference."""
+        user = MagicMock()
+        user.email = email
+        user.notification_preferences = {"email": email_enabled}
+        return user
+
+    def _make_mock_session(self, user):
+        """Return a mock session context manager backed by a UserRepository mock."""
+        mock_user_repo = AsyncMock()
+        mock_user_repo.get_by_id.return_value = user
+        mock_session = AsyncMock()
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+        return mock_session, mock_user_repo
+
+    async def test_ses_not_configured_skips_silently(self) -> None:
+        """When SES is not configured, notify_no_deals_feed completes without error."""
+        config = _make_config()  # no ses_sender_email
+        agent = MessengerAgent(config=config)
+        # Should complete without raising
+        await agent.notify_no_deals_feed(
+            user_id=str(uuid4()),
+            feed_name="Sony headphones",
+            timestamp="2026-03-06T17:43:26+00:00",
+        )
+
+    async def test_user_not_found_skips_silently(self) -> None:
+        """When the user doesn't exist in the DB, the method skips silently."""
+        config = _make_config(ses_sender_email="noreply@example.com")
+        mock_ses = MagicMock()
+        agent = MessengerAgent(config=config, ses=mock_ses)
+        mock_session, mock_user_repo = self._make_mock_session(user=None)
+
+        with (
+            patch("dealfinder.agents.messenger.get_async_session", return_value=mock_session),
+            patch("dealfinder.agents.messenger.UserRepository", return_value=mock_user_repo),
+        ):
+            await agent.notify_no_deals_feed(
+                user_id=str(uuid4()),
+                feed_name="Sony headphones",
+                timestamp="2026-03-06T17:43:26+00:00",
+            )
+
+        mock_ses.send_email.assert_not_called()
+
+    async def test_user_email_disabled_skips_silently(self) -> None:
+        """When a user has email notifications disabled, SES is not called."""
+        config = _make_config(ses_sender_email="noreply@example.com")
+        mock_ses = MagicMock()
+        agent = MessengerAgent(config=config, ses=mock_ses)
+        user = self._make_mock_user(email_enabled=False)
+        mock_session, mock_user_repo = self._make_mock_session(user=user)
+
+        with (
+            patch("dealfinder.agents.messenger.get_async_session", return_value=mock_session),
+            patch("dealfinder.agents.messenger.UserRepository", return_value=mock_user_repo),
+        ):
+            await agent.notify_no_deals_feed(
+                user_id=str(uuid4()),
+                feed_name="Sony headphones",
+                timestamp="2026-03-06T17:43:26+00:00",
+            )
+
+        mock_ses.send_email.assert_not_called()
+
+    async def test_sends_ses_when_email_enabled(self) -> None:
+        """When a user has email enabled, SES send_email is called with correct args."""
+        config = _make_config(ses_sender_email="noreply@example.com")
+        mock_ses = MagicMock()
+        mock_ses.send_email.return_value = "msg-id-ses"
+        agent = MessengerAgent(config=config, ses=mock_ses)
+        user = self._make_mock_user(email="buyer@example.com", email_enabled=True)
+        mock_session, mock_user_repo = self._make_mock_session(user=user)
+
+        with (
+            patch("dealfinder.agents.messenger.get_async_session", return_value=mock_session),
+            patch("dealfinder.agents.messenger.UserRepository", return_value=mock_user_repo),
+        ):
+            await agent.notify_no_deals_feed(
+                user_id=str(uuid4()),
+                feed_name="Sony WH-1000XM5",
+                timestamp="2026-03-06T17:43:26+00:00",
+            )
+
+        mock_ses.send_email.assert_called_once()
+        email_addr, title, message = mock_ses.send_email.call_args[0]
+        assert email_addr == "buyer@example.com"
+        assert "Sony WH-1000XM5" in title
+        assert "Sony WH-1000XM5" in message
+        assert "still searching" in message
+
+    async def test_timestamp_formatted_human_readable(self) -> None:
+        """ISO-8601 timestamp should be formatted to human-readable string in the message."""
+        config = _make_config(ses_sender_email="noreply@example.com")
+        mock_ses = MagicMock()
+        mock_ses.send_email.return_value = "msg-id"
+        agent = MessengerAgent(config=config, ses=mock_ses)
+        user = self._make_mock_user()
+        mock_session, mock_user_repo = self._make_mock_session(user=user)
+
+        with (
+            patch("dealfinder.agents.messenger.get_async_session", return_value=mock_session),
+            patch("dealfinder.agents.messenger.UserRepository", return_value=mock_user_repo),
+        ):
+            await agent.notify_no_deals_feed(
+                user_id=str(uuid4()),
+                feed_name="Laptop",
+                timestamp="2026-03-06T17:43:26+00:00",
+            )
+
+        _, _, message = mock_ses.send_email.call_args[0]
+        assert "Mar 6, 2026" in message
+        assert "+00:00" not in message  # ISO format not exposed to user
+
+    async def test_ses_failure_logged_not_raised(self) -> None:
+        """An SES failure should be logged rather than propagated."""
+        config = _make_config(ses_sender_email="noreply@example.com")
+        mock_ses = MagicMock()
+        mock_ses.send_email.side_effect = RuntimeError("SES unavailable")
+        agent = MessengerAgent(config=config, ses=mock_ses)
+        user = self._make_mock_user()
+        mock_session, mock_user_repo = self._make_mock_session(user=user)
+
+        with (
+            patch("dealfinder.agents.messenger.get_async_session", return_value=mock_session),
+            patch("dealfinder.agents.messenger.UserRepository", return_value=mock_user_repo),
+        ):
+            # Should not raise even when SES fails
+            await agent.notify_no_deals_feed(
+                user_id=str(uuid4()),
+                feed_name="Laptop",
+                timestamp="2026-03-06T17:43:26+00:00",
+            )
+
+
+# ─────────────────────────────────────────────
+# MessengerAgent.run — no_deals_feed event routing
+# ─────────────────────────────────────────────
+
+
+class TestMessengerRunNoDealsPerFeedRouting:
+    """Tests for no_deals_feed event_type routing in MessengerAgent.run."""
+
+    async def test_routes_no_deals_feed_to_notify_no_deals_feed(self) -> None:
+        """Records with event_type=no_deals_feed should call notify_no_deals_feed."""
+        user_id = str(uuid4())
+        event = {
+            "Records": [{
+                "messageId": "msg-1",
+                "body": json.dumps({
+                    "event_type": "no_deals_feed",
+                    "user_id": user_id,
+                    "feed_id": "feed-abc",
+                    "feed_name": "Sony headphones",
+                    "timestamp": "2026-03-06T17:43:26+00:00",
+                }),
+            }]
+        }
+        config = _make_config()
+        agent = MessengerAgent(config=config)
+
+        with (
+            patch.object(agent, "notify_no_deals_feed", new_callable=AsyncMock) as mock_feed,
+            patch.object(agent, "notify_deal", new_callable=AsyncMock) as mock_deal,
+            patch.object(agent, "notify_no_deals", new_callable=AsyncMock) as mock_no_deals,
+        ):
+            result = await agent.run(event, context=None)
+
+        assert result["batchItemFailures"] == []
+        mock_feed.assert_awaited_once_with(
+            user_id=user_id,
+            feed_name="Sony headphones",
+            timestamp="2026-03-06T17:43:26+00:00",
+        )
+        mock_deal.assert_not_called()
+        mock_no_deals.assert_not_called()
+
+    async def test_no_deals_feed_failure_added_to_batch_failures(self) -> None:
+        """If notify_no_deals_feed raises, the record should appear in batchItemFailures."""
+        event = {
+            "Records": [{
+                "messageId": "msg-fail",
+                "body": json.dumps({
+                    "event_type": "no_deals_feed",
+                    "user_id": str(uuid4()),
+                    "feed_id": "feed-xyz",
+                    "feed_name": "Laptop",
+                    "timestamp": "",
+                }),
+            }]
+        }
+        config = _make_config()
+        agent = MessengerAgent(config=config)
+
+        with patch.object(agent, "notify_no_deals_feed", new_callable=AsyncMock) as mock_feed:
+            mock_feed.side_effect = RuntimeError("SES down")
+            result = await agent.run(event, context=None)
+
+        assert result["batchItemFailures"][0]["itemIdentifier"] == "msg-fail"
