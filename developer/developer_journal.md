@@ -1648,3 +1648,80 @@ All four Lambdas confirmed with correct `DB_SECRET_ARN` set post-apply.
 
 **Session End:** March 6, 2026 05:30 UTC
 **Status:** ✅ All Lambda functions can now connect to Aurora — watchlist save and all DB-dependent endpoints restored
+
+---
+
+## Session 8: Bug Fix — Alembic Migration 002 Enum Cast Error (March 6, 2026)
+
+**Date:** March 6, 2026
+**Time:** ~05:50 - 06:00 UTC
+**Duration:** ~10 minutes
+**Phase:** Phase 6 — Post-launch bug fixes
+**Branch:** `dev`
+**Status:** ✅ COMPLETE
+
+### Objective
+
+Diagnose and fix continued HTTP 500 on "Save selected to watchlist" after the
+DB_SECRET_ARN fix (Session 7). The new error was a schema mismatch — Alembic
+migrations had never been run against Aurora.
+
+---
+
+### Root Cause
+
+Migration `002_replace_pushover_with_sns` was failing with:
+
+```
+psycopg2.errors.InvalidTextRepresentation: invalid input value for enum
+notificationchannel: "sns"
+UPDATE notifications SET channel = 'sns' WHERE channel = 'pushover'
+```
+
+The migration tried to UPDATE the `channel` column to `'sns'` **before** `'sns'`
+existed in the old enum. PostgreSQL enforces enum constraints on every UPDATE,
+so the statement was rejected.
+
+The correct order for replacing a PostgreSQL enum value is:
+1. Cast column to `text` (removes enum constraint)
+2. Rename old enum
+3. Create new enum
+4. Update data (safe now — column is `text`)
+5. Cast column back to new enum
+6. Drop old enum
+
+The original migration had the UPDATE at step 1 before any of the type changes.
+
+---
+
+### Fix
+
+Rewrote `upgrade()` in
+`src/dealfinder/db/alembic/versions/20260305_0001_002_replace_pushover_with_sns.py`
+to cast the column to `text` first, then update, then cast back to the new enum.
+
+---
+
+### Actions Taken
+
+1. Fixed migration 002 with correct cast order
+2. Redeployed API Lambda (`./scripts/deploy-api-lambda.sh prod`)
+3. Ran all migrations (`./scripts/run-migrations-lambda.sh prod`) — all 3 applied: ✅
+4. Deployed frontend (`npm run build` + GitHub Actions)
+5. Confirmed no errors in CloudWatch logs post-migration
+
+---
+
+### Lessons Learned
+
+1. **PostgreSQL enum constraints apply to UPDATE, not just INSERT** — you cannot
+   UPDATE a column to a value that is not yet in the current enum type. Cast to
+   `text` first before renaming/replacing the enum.
+
+2. **Always run migrations in a dev environment first** — this failure would have
+   been caught immediately with a local PostgreSQL instance before hitting prod.
+
+---
+
+**Session End:** March 6, 2026 06:00 UTC
+**Status:** ✅ Watchlist save fully operational — all DB endpoints restored

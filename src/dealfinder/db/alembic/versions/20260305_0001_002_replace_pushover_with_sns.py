@@ -25,27 +25,36 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     """Migrate Pushover → SNS."""
 
-    # ── 1. Recreate notificationchannel enum ──────────────────────────────────
+    # ── 1. Recreate notificationchannel enum ──────────────────────────────────────────
     # PostgreSQL does not support removing values from an enum directly.
-    # Strategy: rename old type, create new type, migrate column, drop old type.
+    # Strategy: cast column to text, swap enum type, then cast back.
+    # The text cast avoids the constraint that prevents updating a column
+    # to a value not yet present in the current enum.
 
-    # Convert existing 'pushover' rows to 'sns' before swapping the type
-    op.execute("UPDATE notifications SET channel = 'sns' WHERE channel = 'pushover'")
+    # Step 1: Cast column to text so the UPDATE is unconstrained
+    op.execute(
+        "ALTER TABLE notifications "
+        "ALTER COLUMN channel TYPE text "
+        "USING channel::text"
+    )
 
-    # Rename old enum so it can be dropped after the column is migrated
+    # Step 2: Rename old enum (no longer referenced by the column)
     op.execute("ALTER TYPE notificationchannel RENAME TO notificationchannel_old")
 
-    # Create the new enum without 'pushover'
+    # Step 3: Create the new enum without 'pushover'
     op.execute("CREATE TYPE notificationchannel AS ENUM ('email', 'sns', 'sms', 'websocket')")
 
-    # Migrate the column to use the new enum type
+    # Step 4: Migrate data — 'pushover' → 'sns', now safe as plain text
+    op.execute("UPDATE notifications SET channel = 'sns' WHERE channel = 'pushover'")
+
+    # Step 5: Cast column back to new enum type
     op.execute(
         "ALTER TABLE notifications "
         "ALTER COLUMN channel TYPE notificationchannel "
-        "USING channel::text::notificationchannel"
+        "USING channel::notificationchannel"
     )
 
-    # Drop the old enum type
+    # Step 6: Drop the old enum type
     op.execute("DROP TYPE notificationchannel_old")
 
     # ── 2. Drop pushover_user_key from users ──────────────────────────────────
