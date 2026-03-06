@@ -23,6 +23,9 @@ export function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
+        <div className="app-header-icon">
+          <img src="/dealfinder_icon.png" alt="Deal Finder" />
+        </div>
         <NavBar />
         <main className="main-content">
           <Routes>

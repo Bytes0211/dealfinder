@@ -327,6 +327,7 @@ cd frontend && npm run build
 - Don't use `@app.on_event("startup")` in FastAPI — use the `lifespan` context manager pattern instead.
 - Don't write Alembic enum migrations that UPDATE a column before the new enum value exists — cast the column to `text` first, rename/replace the enum, update data, then cast back. PostgreSQL enforces enum constraints on UPDATE as well as INSERT.
 - Don't set Terraform module output-wiring variables to `default = ""` — required infrastructure wiring (secret ARNs, topic ARNs) should have no default so misconfiguration fails at `terraform plan` time rather than silently at Lambda runtime.
+- Don't filter `Deal.discount_percentage >= 0` without also allowing NULL — SQL `NULL >= 0` evaluates to NULL (falsy), silently excluding unevaluated deals. Use `OR(discount_percentage IS NULL, discount_percentage >= threshold)` when 0 is a "match everything" sentinel.
 
 ## Reference Documentation
 

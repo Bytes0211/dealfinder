@@ -1728,6 +1728,132 @@ to cast the column to `text` first, then update, then cast back to the new enum.
 
 ---
 
+## Session 10: Stabilisation + Feed UI Scan Status (March 6, 2026)
+
+**Date:** March 6, 2026
+**Time:** ~20:00 – 22:01 UTC
+**Duration:** ~2 hours
+**Phase:** Post-launch stabilisation + feature03
+**Branch:** feature03
+**Status:** ✅ COMPLETE — deployed to prod
+
+### Objective
+
+Resolve a ~5-hour pipeline outage caused by the Scanner Lambda failing after redeployment, re-enable RSS feed sources that were silently disabled, fix an asyncio event-loop mismatch in the Lambda container, extend the watchlist matches API to surface pipeline scan status, and fix a silent query bug that excluded unevaluated deals.
+
+---
+
+### Actions Taken
+
+#### 1. Scanner Lambda Outage — Diagnosis & Fix
+
+**Symptom:** Step Function executions succeeding but `sources_scanned=0` — pipeline produced no deals for over 5 hours.
+
+**Root causes (two independent issues):**
+
+1. **Broken Lambda package** — a redeployment had packaged the Lambda zip without the `dealfinder` module, causing `ModuleNotFoundError` on cold start. Fixed by rerunning `./scripts/deploy-lambda.sh prod scanner`.
+
+2. **Event-loop mismatch** — after redeployment, Scanner Lambda raised `Future attached to different event loop`. `asyncio.new_event_loop()` was being called inside `async def run()`, creating a new loop while the Lambda runtime already had one running. Fixed by switching to a `_loop` singleton on the handler module, created once per Lambda container lifetime with `get_event_loop()` / `new_event_loop()`.
+
+**File changed:** `src/dealfinder/agents/scanner.py`
+
+---
+
+#### 2. DealSource Re-Enable Migration
+
+**Symptom:** Even after Scanner fix, `sources_scanned=0` persisted. The `deal_sources` table had zero active entries.
+
+**Root cause:** The table was empty — `DealSource` rows had never been seeded from the user's `saved_feeds` preferences after the Aurora schema was first created.
+
+**Fix:** Alembic migration `20260306_0002_005_reenable_and_seed_deal_sources.py` — inserts/re-enables `DealSource` rows from distinct URLs found across all users' `notification_preferences.saved_feeds` JSONB column.
+
+Post-migration manual Scanner run confirmed `sources_scanned=3`.
+
+---
+
+#### 3. IAM OIDC Deploy Role — Lambda Update Permission
+
+**Symptom:** GitHub Actions backend deploy workflow failing with `AccessDenied` on `lambda:UpdateFunctionCode`.
+
+**Fix:** Extended `dealfinder-github-deploy` IAM role policy in `infrastructure/bootstrap-oidc/main.tf` to allow `lambda:UpdateFunctionCode` and `lambda:GetFunctionConfiguration` on `dealfinder-prod-*` Lambda functions.
+
+---
+
+#### 4. API — Scan Status in Watchlist Matches Response
+
+**Feature:** `GET /users/{id}/watchlist/matches` now returns `last_scan_at` (ISO timestamp of the most recent pipeline scan) and `sources_scanned` (count of active RSS sources) alongside the paginated deals.
+
+**Implementation:**
+- Added `last_scan_at: Optional[str]` and `sources_scanned: Optional[int]` to `DealListResponse` in `schemas.py`.
+- Added `DealSource` import to `routes/users.py`; after the deals query, one aggregate query: `SELECT MAX(last_checked_at), COUNT(id) FROM deal_sources WHERE is_active`.
+- Both values passed into all `DealListResponse(...)` return sites.
+
+**Files changed:** `src/dealfinder/api/schemas.py`, `src/dealfinder/api/routes/users.py`
+
+---
+
+#### 5. Frontend — Feed Page Empty State
+
+**Feature:** When `matchData.items.length === 0`, the Feed page now renders a single left-aligned line:
+
+> No matched deals yet. Last scan: 3/6/2026, 3:52:00 PM — 3 sources scanned
+
+Falls back to "Check back after the next pipeline run." when `last_scan_at` is null.
+
+Added `.state-msg--left` CSS modifier (left-aligned, tighter padding) and applied it to all three state messages in the Matched Deals section (loading, error, empty).
+
+**Files changed:** `frontend/src/api/types.ts`, `frontend/src/pages/FeedPage.tsx`, `frontend/src/index.css`
+
+---
+
+#### 6. Bug Fix — NULL discount_percentage Excluded Unevaluated Deals
+
+**Symptom:** User set feed to 0% minimum discount but still saw no matched deals after pipeline ran.
+
+**Root cause:** The watchlist query filtered `Deal.discount_percentage >= min_discount_overall`. In SQL, `NULL >= 0` evaluates to `NULL` (falsy), silently excluding all deals that had not yet been evaluated by Bedrock (discount still NULL). At 0% threshold the user expects *any* keyword match to appear.
+
+**Fix:** When `min_discount_overall == 0`, the discount filter becomes `OR(discount_percentage IS NULL, discount_percentage >= 0)`, allowing unevaluated deals through. For non-zero thresholds the original strict filter is preserved (a deal with unknown discount shouldn't appear at e.g. ≥20% threshold).
+
+**File changed:** `src/dealfinder/api/routes/users.py`
+
+---
+
+#### 7. Deployment
+
+```
+./scripts/deploy-api-lambda.sh prod
+```
+
+Deployed `dealfinder-prod-api` (39M zip). Lambda updated successfully.
+
+---
+
+### Validation
+
+- ✅ `uv run pytest tests/unit/api/ -v` — 39 passed, 1 warning
+- ✅ `npx tsc --noEmit` — 0 TypeScript errors
+- ✅ API Lambda deployed, CloudWatch logs show no errors
+- ✅ Pipeline running on schedule; `sources_scanned=3` confirmed
+
+---
+
+### Lessons Learned
+
+1. **`NULL >= 0` is falsy in SQL** — numeric comparisons against NULL always return NULL. Always consider NULL when writing threshold filters; use `IS NULL OR value >= threshold` when 0 is a valid "match everything" sentinel.
+
+2. **Lambda event loop lifetime** — a singleton event loop per container (created once in module scope) avoids the "Future attached to different loop" error that occurs when a new loop is created inside an already-running async context.
+
+3. **Empty `deal_sources` table is a silent pipeline killer** — the Scanner returns success with `sources_scanned=0` rather than erroring, making this failure mode invisible without checking the execution output. Seed the table as part of the migration sequence, not as a manual step.
+
+4. **Expose pipeline metadata in API responses** — surfacing `last_scan_at` and `sources_scanned` directly in the watchlist response eliminates user confusion about whether the system is working. Users can see the last run time without needing to inspect CloudWatch.
+
+---
+
+**Session End:** March 6, 2026 22:01 UTC
+**Status:** ✅ Pipeline stable, scan status visible in UI, NULL discount bug fixed — deployed to prod
+
+---
+
 ## Session 9: Feature — Per-Feed No-Deals Notifications (March 6, 2026)
 
 **Date:** March 6, 2026
