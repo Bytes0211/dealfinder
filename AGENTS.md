@@ -6,7 +6,7 @@ This file provides guidance to AI assistants (Claude Code, Warp, etc.) when work
 
 Deal Finder is an AI-powered deal hunting system that discovers deals via RSS feeds, estimates prices using AWS Bedrock (Claude), and sends notifications for high-value opportunities. It's a serverless system on AWS, built by a solo developer.
 
-**Status:** Phase 6 complete. Infrastructure, data layer, core pipeline, notifications, REST API, and React frontend are all live in production. Frontend deployed to CloudFront; API Lambda running FastAPI + Mangum. Tavily-powered free-text search with Bedrock enrichment is live.
+**Status:** Phase 6 live in production. Post-launch stabilisation complete (Sessions 5–8). Frontend on CloudFront, API Lambda running FastAPI + Mangum, Tavily search with Bedrock enrichment live, Aurora schema fully migrated.
 
 ## Architecture
 
@@ -83,7 +83,6 @@ tests/
 │   │   ├── test_evaluator.py
 │   │   └── test_messenger.py   # Phase 4
 │   ├── notifications/          # Phase 4
-│   │   ├── test_pushover.py
 │   │   └── test_ses.py
 │   ├── api/                    # Phase 4
 │   │   ├── conftest.py     # TestClient + in-memory SQLite fixtures
@@ -99,7 +98,8 @@ docs/
 └── USER_GUIDE.md           # End-user API guide
 infrastructure/
 ├── environments/
-│   └── dev/                # Terraform environment (targets prod AWS resources)
+│   ├── dev/                # Terraform environment (manages all prod AWS resources)
+│   └── staging/            # Staging environment
 └── modules/
     ├── networking/         # VPC, subnets, VPC endpoints
     ├── data/               # S3, DynamoDB, Aurora, OpenSearch
@@ -172,8 +172,8 @@ frontend/
 infrastructure/
 ├── bootstrap.sh              # One-time backend setup (S3 + DynamoDB)
 ├── environments/
-│   ├── dev/                  # Dev environment config
-│   └── prod/                 # Prod environment config (Phase 5)
+│   ├── dev/                  # Manages all prod AWS resources
+│   └── staging/              # Staging environment
 └── modules/
     ├── networking/           # VPC, subnets, VPC endpoints
     ├── data/                 # S3, DynamoDB, Aurora, OpenSearch
@@ -282,6 +282,32 @@ Feature flags keep idle costs at ~$4-10/month:
 | `docs/cost_management.md` | AWS cost breakdown and optimization guide |
 | `docs/USER_GUIDE.md` | End-user API and notification guide |
 
+## Deployment
+
+**Deploy API Lambda** (after Python/FastAPI changes):
+```bash
+./scripts/deploy-api-lambda.sh prod
+```
+
+**Run database migrations** (after schema/Alembic changes):
+```bash
+./scripts/run-migrations-lambda.sh prod
+```
+This swaps the Lambda handler temporarily to run `alembic upgrade head` inside the VPC
+(where it can reach Aurora), then restores the API handler automatically.
+
+**Deploy infrastructure** (after Terraform changes):
+```bash
+cd infrastructure/environments/dev
+terraform apply
+```
+
+**Deploy frontend** (after React/Vite changes):
+```bash
+cd frontend && npm run build
+# GitHub Actions (frontend.yml) handles S3 sync + CloudFront invalidation on push to main
+```
+
 ## What NOT to Do
 
 - Don't add Kafka, Spark, ECS, or SageMaker — these were intentionally removed from scope.
@@ -294,6 +320,8 @@ Feature flags keep idle costs at ~$4-10/month:
 - Don't use Step Functions `Pass` states for error paths — use `Fail` states with `Error`/`Cause` so failed executions show up in `ExecutionsFailed` metrics and alerting.
 - Don't access ORM relationships lazily in FastAPI route handlers — always use `selectinload()` in the query to avoid `MissingGreenlet` errors in async context.
 - Don't use `@app.on_event("startup")` in FastAPI — use the `lifespan` context manager pattern instead.
+- Don't write Alembic enum migrations that UPDATE a column before the new enum value exists — cast the column to `text` first, rename/replace the enum, update data, then cast back. PostgreSQL enforces enum constraints on UPDATE as well as INSERT.
+- Don't set Terraform module output-wiring variables to `default = ""` — required infrastructure wiring (secret ARNs, topic ARNs) should have no default so misconfiguration fails at `terraform plan` time rather than silently at Lambda runtime.
 
 ## Reference Documentation
 

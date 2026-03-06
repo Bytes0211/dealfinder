@@ -100,7 +100,7 @@ export function SearchPage() {
       title: r.title,
       url: r.url,
       current_price: r.current_price,
-      min_discount: resultStates[i]?.minDiscount ?? 20,
+      min_discount: Math.round(Number.isFinite(resultStates[i]?.minDiscount) ? resultStates[i].minDiscount : 20),
       quality_score: r.quality_score,
       quality_reason: r.quality_reason,
       saved_at: new Date().toISOString(),
@@ -118,9 +118,21 @@ export function SearchPage() {
           let detail: string;
           if (isAxiosError(err) && err.response) {
             const d = err.response.data;
-            detail = d?.detail
-              ? String(d.detail)
-              : `HTTP ${err.response.status}: ${JSON.stringify(d)}`;
+            if (d?.detail) {
+              if (Array.isArray(d.detail)) {
+                // FastAPI 422 validation errors — format each entry as "field: message"
+                detail = (d.detail as Array<{ loc?: string[]; msg?: string }>)
+                  .map((e) => {
+                    const field = (e.loc ?? []).slice(1).join('.') || 'field';
+                    return `${field}: ${e.msg ?? 'invalid'}`;
+                  })
+                  .join('; ');
+              } else {
+                detail = String(d.detail);
+              }
+            } else {
+              detail = `HTTP ${err.response.status}: ${JSON.stringify(d)}`;
+            }
           } else if (isAxiosError(err)) {
             detail = `Network error: ${err.message}`;
           } else {
