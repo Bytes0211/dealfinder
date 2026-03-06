@@ -254,7 +254,7 @@ h1 { font-size: 1.6rem; font-weight: 700; }
 .info-tooltip:hover .info-tooltip-bubble,
 .info-tooltip-icon:focus + .info-tooltip-bubble { visibility: visible; opacity: 1; }
 
-/* ── Saved feeds panel
+/* ── Saved feeds panel ─────────────────────────────── */
 .saved-feeds-panel {
   display: flex;
   align-items: center;
@@ -297,8 +297,44 @@ h1 { font-size: 1.6rem; font-weight: 700; }
 }
 .saved-feed-delete:hover { color: var(--c-danger); }
 
+/* ── Danger button ────────────────────────────────── */
+.btn-danger { background: var(--c-danger); color: #fff; border-color: var(--c-danger); }
+.btn-danger:hover { background: #bb2d3b; }
+
 /* ── Save button (saved state) ─────────────────────── */
 .btn-saved { background: #e8f0fe; color: var(--c-primary); border-color: var(--c-primary); }
+
+/* ── Feed page sections ────────────────────────────── */
+.feed-section { display: flex; flex-direction: column; gap: 1rem; }
+.feed-section-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.section-subtitle { font-size: .875rem; color: var(--c-muted); }
+
+/* ── Watchlist cards ───────────────────────────────── */
+.watchlist-list { display: flex; flex-direction: column; gap: .5rem; }
+.watchlist-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: .6rem 1rem;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.watchlist-card-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: .75rem; }
+.watchlist-card-title {
+  font-weight: 500;
+  font-size: .9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.watchlist-card-meta { display: flex; align-items: center; gap: .5rem; flex-shrink: 0; }
+.watchlist-card-price { font-size: .8rem; font-weight: 600; color: var(--c-success); }
+.watchlist-card-actions { display: flex; align-items: center; gap: .5rem; flex-shrink: 0; }
+.watchlist-discount-badge { font-size: .8rem; font-weight: 600; color: var(--c-primary); white-space: nowrap; }
+.watchlist-discount-edit { display: inline-flex; align-items: center; gap: .4rem; font-size: .8rem; }
 
 /* ── Search results table ─────────────────────────── */
 .search-form { display: flex; gap: .75rem; }

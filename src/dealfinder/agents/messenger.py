@@ -390,12 +390,59 @@ class MessengerAgent:
             "channels_attempted": channels_attempted,
         }
 
+    async def notify_no_deals(self, timestamp: str, sources_scanned: int) -> None:
+        """Send a 'no deals found' notification via SNS and optional SES.
+
+        Does not call Bedrock (no deal to describe) and does not write a
+        ``Notification`` DB row (no ``deal_id`` to associate).  Publishes a
+        plain status message to all configured channels.
+
+        Args:
+            timestamp: ISO-8601 scan timestamp from the pipeline's ``scanned_at`` field.
+            sources_scanned: Number of RSS sources scanned in this pipeline run.
+        """
+        title = "No Deals Found"
+        message = (
+            f"Scanned {sources_scanned} source(s) at {timestamp} — "
+            "no high-value deals discovered."
+        )
+        loop = asyncio.get_running_loop()
+
+        if self._sns:
+            try:
+                await loop.run_in_executor(None, self._sns.publish, title, message)
+                logger.info("Sent no-deals SNS notification")
+            except Exception as exc:
+                logger.error(f"SNS publish failed for no_deals notification: {exc}")
+
+        if self._ses:
+            try:
+                async with get_async_session() as session:
+                    user_repo = UserRepository(session)
+                    users = await user_repo.find_active_users()
+            except Exception as exc:
+                logger.warning(f"no_deals: failed to load users for SES dispatch: {exc}")
+                return
+
+            for user in users:
+                prefs = user.notification_preferences or {}
+                if not (user.email and prefs.get("email", False)):
+                    continue
+                try:
+                    await loop.run_in_executor(
+                        None, self._ses.send_email, user.email, title, message
+                    )
+                    logger.info(f"Sent no-deals email to {user.email}")
+                except Exception as exc:
+                    logger.error(f"SES send failed for {user.email} (no_deals): {exc}")
+
     async def run(self, event: dict, context: Any) -> dict:
         """Process an SQS batch event from the notification_dispatch queue.
 
-        Each SQS record body is a JSON string ``{"deal_id": "<uuid>"}``.
-        Failed records are returned in ``batchItemFailures`` so that SQS
-        retries only the records that errored rather than the entire batch.
+        Each SQS record body is either ``{"deal_id": "<uuid>"}`` for a deal
+        notification or ``{"event_type": "no_deals", ...}`` for a pipeline
+        no-deals status message.  Failed records are returned in
+        ``batchItemFailures`` so SQS retries only those records.
 
         Args:
             event: Lambda SQS event containing a ``Records`` list.
@@ -411,8 +458,24 @@ class MessengerAgent:
             message_id = record.get("messageId", "unknown")
             try:
                 body = json.loads(record.get("body", "{}"))
+            except json.JSONDecodeError as exc:
+                logger.error(f"Malformed SQS record {message_id}: {exc}")
+                batch_item_failures.append({"itemIdentifier": message_id})
+                continue
+
+            if body.get("event_type") == "no_deals":
+                try:
+                    await self.notify_no_deals(
+                        body.get("timestamp", ""), body.get("sources_scanned", 0)
+                    )
+                except Exception as exc:
+                    logger.error(f"notify_no_deals failed (record {message_id}): {exc}")
+                    batch_item_failures.append({"itemIdentifier": message_id})
+                continue
+
+            try:
                 deal_id = UUID(body["deal_id"])
-            except (json.JSONDecodeError, KeyError, ValueError) as exc:
+            except (KeyError, ValueError) as exc:
                 logger.error(f"Malformed SQS record {message_id}: {exc}")
                 batch_item_failures.append({"itemIdentifier": message_id})
                 continue

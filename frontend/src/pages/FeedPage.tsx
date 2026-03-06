@@ -98,9 +98,6 @@ export function FeedPage() {
                   >
                     {feed.title}
                   </a>
-                  {feed.query && (
-                    <span className="watchlist-card-query">"{feed.query}"</span>
-                  )}
                   <div className="watchlist-card-meta">
                     {feed.current_price && (
                       <span className="watchlist-card-price">{feed.current_price}</span>

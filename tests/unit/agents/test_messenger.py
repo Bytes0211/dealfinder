@@ -421,3 +421,126 @@ class TestMessengerAgentRun:
 
         assert len(result["batchItemFailures"]) == 1
         assert result["batchItemFailures"][0]["itemIdentifier"] == "bad"
+
+
+# ─────────────────────────────────────────────
+# MessengerAgent.notify_no_deals
+# ─────────────────────────────────────────────
+
+
+class TestNotifyNoDeals:
+    """Tests for MessengerAgent.notify_no_deals."""
+
+    async def test_publishes_to_sns_when_configured(self) -> None:
+        """notify_no_deals should call SNS publish with a fixed title and status message."""
+        config = _make_config(sns_topic_arn="arn:aws:sns:us-east-1:123:topic")
+        mock_sns = MagicMock()
+        mock_sns.publish.return_value = "msg-id-001"
+        agent = MessengerAgent(config=config, sns=mock_sns)
+
+        await agent.notify_no_deals("2026-03-06T17:43:26+00:00", sources_scanned=3)
+
+        mock_sns.publish.assert_called_once()
+        title, message = mock_sns.publish.call_args[0]
+        assert title == "No Deals Found"
+        assert "3 source(s)" in message
+
+    async def test_no_sns_call_when_not_configured(self) -> None:
+        """With no sns_topic_arn, SNS publish should not be called and no error raised."""
+        config = _make_config()  # no sns_topic_arn
+        agent = MessengerAgent(config=config)
+        # Should complete without raising
+        await agent.notify_no_deals("2026-03-06T17:43:26+00:00", sources_scanned=2)
+
+    async def test_sns_error_is_logged_not_raised(self) -> None:
+        """An SNS failure during no_deals notification should be logged, not raised."""
+        config = _make_config(sns_topic_arn="arn:aws:sns:us-east-1:123:topic")
+        mock_sns = MagicMock()
+        mock_sns.publish.side_effect = RuntimeError("SNS unavailable")
+        agent = MessengerAgent(config=config, sns=mock_sns)
+
+        # Should not raise even when SNS fails
+        await agent.notify_no_deals("2026-03-06T17:43:26+00:00", sources_scanned=1)
+
+
+# ─────────────────────────────────────────────
+# MessengerAgent.run — no_deals event routing
+# ─────────────────────────────────────────────
+
+
+class TestMessengerRunNoDealsRouting:
+    """Tests for no_deals event_type routing in MessengerAgent.run."""
+
+    async def test_routes_no_deals_event_type_to_notify_no_deals(self) -> None:
+        """Records with event_type=no_deals should call notify_no_deals not notify_deal."""
+        event = {
+            "Records": [{
+                "messageId": "msg-1",
+                "body": json.dumps({
+                    "event_type": "no_deals",
+                    "timestamp": "2026-03-06T17:43:26+00:00",
+                    "sources_scanned": 3,
+                }),
+            }]
+        }
+        config = _make_config()
+        agent = MessengerAgent(config=config)
+
+        with (
+            patch.object(agent, "notify_no_deals", new_callable=AsyncMock) as mock_no_deals,
+            patch.object(agent, "notify_deal", new_callable=AsyncMock) as mock_deal,
+        ):
+            result = await agent.run(event, context=None)
+
+        assert result["batchItemFailures"] == []
+        mock_no_deals.assert_awaited_once_with("2026-03-06T17:43:26+00:00", 3)
+        mock_deal.assert_not_called()
+
+    async def test_no_deals_failure_added_to_batch_failures(self) -> None:
+        """If notify_no_deals raises, the record should appear in batchItemFailures."""
+        event = {
+            "Records": [{
+                "messageId": "msg-fail",
+                "body": json.dumps({
+                    "event_type": "no_deals",
+                    "timestamp": "",
+                    "sources_scanned": 0,
+                }),
+            }]
+        }
+        config = _make_config()
+        agent = MessengerAgent(config=config)
+
+        with patch.object(agent, "notify_no_deals", new_callable=AsyncMock) as mock_no_deals:
+            mock_no_deals.side_effect = RuntimeError("SNS down")
+            result = await agent.run(event, context=None)
+
+        assert result["batchItemFailures"][0]["itemIdentifier"] == "msg-fail"
+
+    async def test_regular_deal_record_still_processed_in_mixed_batch(self) -> None:
+        """A batch with both deal and no_deals records should route each correctly."""
+        deal_id = str(uuid4())
+        event = {
+            "Records": [
+                {
+                    "messageId": "msg-deal",
+                    "body": json.dumps({"deal_id": deal_id}),
+                },
+                {
+                    "messageId": "msg-no-deals",
+                    "body": json.dumps({"event_type": "no_deals", "timestamp": "", "sources_scanned": 0}),
+                },
+            ]
+        }
+        config = _make_config()
+        agent = MessengerAgent(config=config)
+
+        with (
+            patch.object(agent, "notify_deal", new_callable=AsyncMock) as mock_deal,
+            patch.object(agent, "notify_no_deals", new_callable=AsyncMock) as mock_no_deals,
+        ):
+            result = await agent.run(event, context=None)
+
+        assert result["batchItemFailures"] == []
+        mock_deal.assert_awaited_once()
+        mock_no_deals.assert_awaited_once()

@@ -57,6 +57,30 @@ resource "aws_sqs_queue" "notification_dispatch" {
 }
 
 # ─────────────────────────────────────────────
+# DynamoDB — Pipeline Deduplication Table
+# ─────────────────────────────────────────────
+# Separate from the notifications module's dedup table to avoid a circular
+# Terraform dependency (notifications depends on pipeline for the SQS queue ARN).
+
+resource "aws_dynamodb_table" "pipeline_dedup" {
+  name         = "${local.prefix}-pipeline-dedup"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "pk"
+
+  attribute {
+    name = "pk"
+    type = "S"
+  }
+
+  ttl {
+    attribute_name = "expires_at"
+    enabled        = true
+  }
+
+  tags = merge(var.tags, { Name = "${local.prefix}-pipeline-dedup" })
+}
+
+# ─────────────────────────────────────────────
 # CloudWatch Log Groups for Lambda
 # ─────────────────────────────────────────────
 
@@ -68,6 +92,12 @@ resource "aws_cloudwatch_log_group" "scanner" {
 
 resource "aws_cloudwatch_log_group" "evaluator" {
   name              = "/aws/lambda/${local.prefix}-evaluator"
+  retention_in_days = var.log_retention_days
+  tags              = var.tags
+}
+
+resource "aws_cloudwatch_log_group" "pipeline_summary" {
+  name              = "/aws/lambda/${local.prefix}-pipeline-summary"
   retention_in_days = var.log_retention_days
   tags              = var.tags
 }
@@ -137,6 +167,54 @@ resource "aws_iam_role_policy" "scanner_inline" {
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
         Resource = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/${var.environment}/*"
+      },
+    ]
+  })
+}
+
+# PipelineSummary Lambda role
+resource "aws_iam_role" "pipeline_summary" {
+  name               = "${local.prefix}-pipeline-summary-role"
+  assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
+  tags               = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "pipeline_summary_basic" {
+  role       = aws_iam_role.pipeline_summary.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+}
+
+resource "aws_iam_role_policy" "pipeline_summary_inline" {
+  name = "${local.prefix}-pipeline-summary-policy"
+  role = aws_iam_role.pipeline_summary.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Logs"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+        ]
+        Resource = "${aws_cloudwatch_log_group.pipeline_summary.arn}:*"
+      },
+      {
+        Sid      = "SQSSend"
+        Effect   = "Allow"
+        Action   = ["sqs:SendMessage"]
+        Resource = aws_sqs_queue.notification_dispatch.arn
+      },
+      {
+        Sid    = "DynamoDB"
+        Effect = "Allow"
+        Action = [
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+        ]
+        Resource = aws_dynamodb_table.pipeline_dedup.arn
       },
     ]
   })
@@ -291,6 +369,38 @@ resource "aws_lambda_function" "scanner" {
   }
 }
 
+resource "aws_lambda_function" "pipeline_summary" {
+  function_name = "${local.prefix}-pipeline-summary"
+  description   = "PipelineSummaryAgent — notifies when no high-value deals found this run"
+  role          = aws_iam_role.pipeline_summary.arn
+  runtime       = var.lambda_runtime
+  handler       = "dealfinder.agents.pipeline_summary.handler"
+  filename      = data.archive_file.placeholder.output_path
+  timeout       = var.lambda_timeout_seconds
+  memory_size   = var.lambda_memory_mb
+
+  vpc_config {
+    subnet_ids         = var.private_subnet_ids
+    security_group_ids = [aws_security_group.lambda.id]
+  }
+
+  environment {
+    variables = {
+      DEALFINDER_BEDROCK_REGION         = var.aws_region
+      DEALFINDER_NOTIFICATION_QUEUE_URL = aws_sqs_queue.notification_dispatch.url
+      DEALFINDER_DEDUP_TABLE_NAME       = aws_dynamodb_table.pipeline_dedup.name
+    }
+  }
+
+  depends_on = [aws_cloudwatch_log_group.pipeline_summary]
+
+  tags = merge(var.tags, { Name = "${local.prefix}-pipeline-summary" })
+
+  lifecycle {
+    ignore_changes = [filename, source_code_hash]
+  }
+}
+
 resource "aws_lambda_function" "evaluator" {
   function_name = "${local.prefix}-evaluator"
   description   = "EvaluatorAgent — estimates price via Bedrock and calculates discounts"
@@ -360,6 +470,7 @@ resource "aws_iam_role_policy" "step_functions_inline" {
         Resource = [
           aws_lambda_function.scanner.arn,
           aws_lambda_function.evaluator.arn,
+          aws_lambda_function.pipeline_summary.arn,
         ]
       },
       {
@@ -522,7 +633,32 @@ resource "aws_sfn_state_machine" "pipeline" {
             }
           }
         }
-        Next = "PipelineComplete"
+        ResultPath = "$.evaluated_deals"
+        Next       = "CheckPipelineResults"
+      }
+
+      CheckPipelineResults = {
+        Type       = "Task"
+        Resource   = aws_lambda_function.pipeline_summary.arn
+        Comment    = "Notify if no high-value deals found this run (24-hour rolling debounce)"
+        ResultPath = null
+        Next       = "PipelineComplete"
+        Retry = [
+          {
+            ErrorEquals     = ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException"]
+            IntervalSeconds = 2
+            MaxAttempts     = 3
+            BackoffRate     = 2.0
+          }
+        ]
+        Catch = [
+          {
+            # Non-fatal: pipeline succeeded even if the summary check fails
+            ErrorEquals = ["States.ALL"]
+            Next        = "PipelineComplete"
+            ResultPath  = "$.summaryError"
+          }
+        ]
       }
 
       PipelineComplete = {
