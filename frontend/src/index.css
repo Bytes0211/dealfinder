@@ -335,6 +335,67 @@ h1 { font-size: 1.6rem; font-weight: 700; }
 /* ── Save button (saved state) ─────────────────────── */
 .btn-saved { background: #e8f0fe; color: var(--c-primary); border-color: var(--c-primary); }
 
+/* ── Search results table ─────────────────────────── */
+.search-form { display: flex; gap: .75rem; }
+.search-input {
+  flex: 1;
+  padding: .5rem .75rem;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  font-size: .9rem;
+  background: var(--c-surface);
+}
+.search-input:focus { outline: 2px solid var(--c-primary); outline-offset: 1px; }
+
+.search-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .9rem;
+  background: var(--c-surface);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.search-table thead th {
+  text-align: left;
+  padding: .55rem .75rem;
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--c-muted);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  border-bottom: 2px solid var(--c-border);
+  background: var(--c-bg);
+  white-space: nowrap;
+}
+.search-table thead th:first-child { width: 36px; text-align: center; }
+.search-row td {
+  padding: .65rem .75rem;
+  border-bottom: 1px solid var(--c-border);
+  vertical-align: middle;
+}
+.search-row:last-child td { border-bottom: none; }
+.search-row:hover td { background: var(--c-bg); }
+.search-row--selected td { background: #e8f0fe; }
+.search-row--selected:hover td { background: #dce8fd; }
+.search-row--saved td { background: #d1e7dd; }
+.search-row-check { width: 36px; text-align: center; }
+.search-row-feed { min-width: 180px; font-weight: 500; }
+.search-row-desc {
+  color: var(--c-muted);
+  font-size: .85rem;
+  max-width: 340px;
+}
+.search-result-price { font-weight: 600; color: var(--c-success); margin-right: .5rem; }
+.search-result-reason { font-style: italic; }
+.search-row-quality { white-space: nowrap; }
+.search-row-actions { white-space: nowrap; min-width: 130px; }
+.quality-badge { font-size: .8rem; font-weight: 600; white-space: nowrap; }
+.search-result-discount { display: inline-flex; align-items: center; gap: .4rem; font-size: .8rem; }
+.form-input--sm { width: 60px; padding: .25rem .4rem; font-size: .8rem; }
+.badge--ok { background: #d1e7dd; color: var(--c-success); }
+.search-actions { display: flex; gap: .75rem; flex-wrap: wrap; }
+
 /* ── Misc ─────────────────────────────────────────── */
 .state-msg { color: var(--c-muted); font-size: .9rem; padding: 2rem 0; text-align: center; }
 .state-msg--error { color: var(--c-danger); }

@@ -1351,3 +1351,109 @@ The `dealfinder-prod-api` Lambda was created by Terraform with placeholder code 
 
 **Session End:** March 5, 2026 18:30 UTC
 **Status:** 🚧 Phase 6 frontend live at https://dk39ppkr0zciw.cloudfront.net — API Lambda deployment pending
+
+---
+
+## Session 5: Phase 6 Bug Fixes + UI Polish (March 6, 2026)
+
+**Date:** March 6, 2026
+**Time:** ~01:00 - 01:35 UTC
+**Duration:** ~35 minutes
+**Phase:** Phase 6 — Post-launch bug fixes and UI polish
+**Status:** ✅ COMPLETE
+
+### Objective
+
+Diagnose and fix the "Search failed. Error X001" error reported on the live site, improve the search results layout, and fix the missing navbar logo.
+
+---
+
+### Actions Taken
+
+#### 1. Diagnose Search Error X001
+
+**Symptom:** Clicking Search in the live app returns "Search failed. Error X001." with no actionable detail.
+
+**Investigation:**
+- Traced error from `SearchPage.tsx` → `useSearch()` → `postSearch()` → `POST /api/v1/search`
+- Checked `src/dealfinder/api/routes/search.py`: confirmed endpoint raises HTTP 400 when `DEALFINDER_TAVILY_API_KEY` is empty
+- Confirmed via AWS CLI: `DEALFINDER_TAVILY_API_KEY` was `None` on `dealfinder-prod-api` Lambda
+
+**Root cause:** `tavily_api_key` Terraform variable defaulted to `""` and was never overridden at deploy time.
+
+**Fix:**
+```bash
+export TF_VAR_tavily_api_key="<key>"
+terraform apply  # from infrastructure/environments/dev/
+```
+
+**GitHub issue:** [#9](https://github.com/Bytes0211/dealfinder/issues/9)
+**Local issue file:** `github/ISSUES/001-search-error-x001-missing-tavily-key.md`
+
+---
+
+#### 2. Fix Frontend Error Message (SearchPage.tsx)
+
+**Problem:** `SearchPage.tsx` showed a hardcoded `"Search failed. Error X001."` regardless of the actual HTTP status or error detail from the backend.
+
+**Fix:** Import `isAxiosError` from axios; extract `error.response.data.detail` from the Axios error object and render it directly. Falls back to a generic message for non-HTTP errors.
+
+**Files changed:** `frontend/src/pages/SearchPage.tsx`
+
+---
+
+#### 3. Fix Search Results Layout (SearchPage.tsx + index.css)
+
+**Problem:** Search result cards had no CSS defined — all `search-result-card`, `search-result-check`, `search-result-body`, etc. classes were referenced in JSX but absent from `index.css`, so the layout was broken (checkbox stacked above title, quality score stacked below).
+
+**Fix:** Replaced `<div>`-based card layout with a proper `<table>` with column headers. Added all required CSS classes.
+
+**Layout after fix:**
+- Column headers: (checkbox) | **Feed** | **Description** | **Quality Score** | (actions)
+- Each result row: checkbox | linked title | price + reason | quality badge | min % input or Saved ✔
+- Selected rows highlighted in blue; saved rows highlighted in green
+
+**Files changed:**
+- `frontend/src/pages/SearchPage.tsx` — replaced `div` cards with `<table>` + `<thead>` + `<tbody>`
+- `frontend/src/index.css` — added `.search-table`, `.search-row`, `.search-row-*`, `.quality-badge`, `.search-result-discount`, `.form-input--sm`, `.badge--ok`, `.search-form`, `.search-input`, `.search-actions`
+
+---
+
+#### 4. Fix Missing NavBar Logo
+
+**Problem:** `NavBar.tsx` referenced `<img src="/dealfinder_icon.png" />` but the file does not exist in `public/`. Browser showed a broken-image icon.
+
+**Fix:** Replaced `<img>` with an inline SVG price-tag icon (no external file dependency). Icon uses the primary brand blue (`#0d6efd`) with a circle dot — thematically appropriate for a deal finder.
+
+**Files changed:** `frontend/src/components/NavBar.tsx`
+
+---
+
+### Validation
+
+- ✅ `npm run build` — clean build, 0 TypeScript errors (all three fixes)
+- ✅ `uv run pytest tests/ -v` — 311 passed, 41 skipped (no regressions)
+- ✅ Tavily key confirmed live via AWS Lambda console
+
+---
+
+### Lessons Learned
+
+1. **Always define CSS classes before shipping** — referencing undefined classes silently breaks layout; no console errors are thrown for missing CSS classes.
+2. **Generic error codes obscure root cause** — `"Error X001"` gave users no recourse. FastAPI already returns structured `{"detail": "..."}` — surface it.
+3. **Terraform variable defaults of `""` are a deployment trap** — sensitive required vars (API keys) should have no default or a reminder comment, not a silent empty string.
+4. **Inline SVG > image files** for small icons — no 404s, no extra deploy steps, no CDN cache concerns.
+
+---
+
+### Next Steps
+
+1. Commit and deploy all three frontend fixes
+2. End-to-end test: search → save to watchlist → verify Feed page shows watchlist item → verify matched deals appear
+3. Test phone number + SMS notification flow via Preferences page
+4. Update `developer/project-status.md` to mark Phase 6 as 100% complete
+
+---
+
+**Session End:** March 6, 2026 01:35 UTC
+**Status:** ✅ Search error resolved, layout fixed, logo fixed — ready to deploy
