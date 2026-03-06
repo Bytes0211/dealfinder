@@ -124,7 +124,7 @@ Thumbs.db
 *.parquet
 *.pkl
 *.pickle
-data/
+/data/
 *.db
 *.sqlite
 *.sqlite3
