@@ -168,27 +168,19 @@ export function FeedPage() {
             RSS deals from your feeds that meet your minimum discount thresholds.
           </p>
 
-          {matchLoading && <p className="state-msg">Loading matches…</p>}
+          {matchLoading && <p className="state-msg state-msg--left">Loading matches…</p>}
           {matchError && (
-            <p className="state-msg state-msg--error">Could not load matched deals.</p>
+            <p className="state-msg state-msg--left state-msg--error">Could not load matched deals.</p>
           )}
           {matchData && (
             <>
               {matchData.items.length === 0 ? (
-                <div className="state-msg">
-                  <p>No matched deals yet.</p>
-                  {matchData.last_scan_at ? (
-                    <p className="state-msg--detail">
-                      Last pipeline run:{' '}
-                      <strong>{new Date(matchData.last_scan_at).toLocaleString()}</strong>
-                      {matchData.sources_scanned != null && matchData.sources_scanned > 0 && (
-                        <> &mdash; {matchData.sources_scanned} source{matchData.sources_scanned !== 1 ? 's' : ''} scanned</>
-                      )}
-                    </p>
-                  ) : (
-                    <p className="state-msg--detail">Check back after the next pipeline run.</p>
-                  )}
-                </div>
+                <p className="state-msg state-msg--left">
+                  No matched deals yet.{matchData.last_scan_at ? (
+                    <>{' '}Last scan: {new Date(matchData.last_scan_at).toLocaleString()}{matchData.sources_scanned != null && matchData.sources_scanned > 0 && (
+                      <> &mdash; {matchData.sources_scanned} source{matchData.sources_scanned !== 1 ? 's' : ''} scanned</>)}</>
+                  ) : ' Check back after the next pipeline run.'}
+                </p>
               ) : (
                 <>
                   <p className="result-count">{matchData.total} matched deals</p>

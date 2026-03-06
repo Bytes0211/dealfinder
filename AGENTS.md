@@ -6,7 +6,7 @@ This file provides guidance to AI assistants (Claude Code, Warp, etc.) when work
 
 Deal Finder is an AI-powered deal hunting system that discovers deals via RSS feeds, estimates prices using AWS Bedrock (Claude), and sends notifications for high-value opportunities. It's a serverless system on AWS, built by a solo developer.
 
-**Status:** Phase 6 live in production. Post-launch stabilisation complete (Sessions 5–8). Frontend on CloudFront, API Lambda running FastAPI + Mangum, Tavily search with Bedrock enrichment live, Aurora schema fully migrated. Per-feed no-deals notifications live (feature02): users receive a per-feed "still searching" SES email for any saved feed that produced no match in a given pipeline run, with 24-hour rolling dedup per (user, feed) pair.
+**Status:** Phase 6 live in production. Post-launch stabilisation complete (Sessions 5–8). Frontend on CloudFront, API Lambda running FastAPI + Mangum, Tavily search with Bedrock enrichment live, Aurora schema fully migrated. Per-feed no-deals notifications live (feature02). Feed page now surfaces last pipeline scan time and source count in the watchlist empty-state via `DealListResponse.last_scan_at` and `sources_scanned` (feature03).
 
 ## Architecture
 
@@ -272,7 +272,8 @@ Feature flags keep idle costs at ~$4-10/month:
 | `src/dealfinder/api/main.py` | FastAPI app + Mangum Lambda handler |
 | `src/dealfinder/api/routes/deals.py` | Deal endpoints (list, top, detail) |
 | `src/dealfinder/api/routes/search.py` | POST /search — Tavily + Bedrock enrichment |
-| `src/dealfinder/api/routes/users.py` | User CRUD, preferences, watchlist matches, delete |
+|| `src/dealfinder/api/routes/users.py` | User CRUD, preferences, watchlist matches (returns `last_scan_at`, `sources_scanned`), delete |
+|| `src/dealfinder/api/schemas.py` | Pydantic schemas; `DealListResponse` includes `last_scan_at` + `sources_scanned` |
 | `src/dealfinder/db/models.py` | All 5 ORM models |
 | `src/dealfinder/data/repository.py` | All 5 repository classes + BaseRepository |
 | `src/dealfinder/db/connection.py` | Async DB engine and session management |

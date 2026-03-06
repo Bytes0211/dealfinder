@@ -399,6 +399,7 @@ h1 { font-size: 1.6rem; font-weight: 700; }
 
 /* ── Misc ─────────────────────────────────────────── */
 .state-msg { color: var(--c-muted); font-size: .9rem; padding: 2rem 0; text-align: center; }
+.state-msg--left { text-align: left; padding: .5rem 0; }
 .state-msg--error { color: var(--c-danger); }
 .state-msg--ok { color: var(--c-success); }
 .result-count { font-size: .875rem; color: var(--c-muted); }
