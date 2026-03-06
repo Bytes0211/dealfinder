@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { isAxiosError } from 'axios';
 import { useSearch, useUpdatePreferences, useUserPreferences } from '../hooks';
 import { isAuthenticated, getUserId } from '../auth';
 import type { SavedFeed, SearchResult } from '../api/types';
@@ -31,8 +32,19 @@ export function SearchPage() {
   const [savedIndexes, setSavedIndexes] = useState<Set<number>>(new Set());
   const [saveMsg, setSaveMsg] = useState('');
 
-  const { mutate: search, data: searchData, isPending: isSearching, isError: searchError } =
-    useSearch();
+  const {
+    mutate: search,
+    data: searchData,
+    isPending: isSearching,
+    isError: searchError,
+    error: searchErrorObj,
+  } = useSearch();
+
+  const searchErrorMsg = searchErrorObj
+    ? isAxiosError(searchErrorObj) && searchErrorObj.response?.data?.detail
+      ? String(searchErrorObj.response.data.detail)
+      : 'An unexpected error occurred — please try again.'
+    : '';
 
   const { data: userPrefs } = useUserPreferences(authed ? userId : '');
   const { mutate: savePrefs } = useUpdatePreferences(userId);
@@ -130,7 +142,7 @@ export function SearchPage() {
       </form>
 
       {searchError && (
-        <p className="state-msg state-msg--error">Search failed. Error X001.</p>
+        <p className="state-msg state-msg--error">Search failed: {searchErrorMsg}</p>
       )}
 
       {results.length > 0 && (
