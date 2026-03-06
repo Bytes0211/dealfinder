@@ -7,7 +7,7 @@ variable "project_name" {
 variable "environment" {
   description = "Environment name"
   type        = string
-  default     = "dev"
+  default     = "prod"
 }
 
 variable "aws_region" {
@@ -19,26 +19,41 @@ variable "aws_region" {
 variable "vpc_cidr" {
   description = "CIDR block for VPC"
   type        = string
-  default     = "10.0.0.0/16"
+  default     = "10.1.0.0/16"
 }
 
-# Cost-saving feature flags
+# ── Cost-saving feature flags ────────────────────────────────────────────────
+
 variable "enable_nat_gateway" {
   description = "Enable NAT Gateway (disable to save ~$100/month)"
   type        = bool
-  default     = false # Disabled by default for dev
+  default     = true # Enabled in prod for Lambda internet access
+}
+
+variable "enable_aurora" {
+  description = "Enable Aurora PostgreSQL cluster (disable to save ~$50-100/month)"
+  type        = bool
+  default     = true # Required in prod
 }
 
 variable "enable_opensearch" {
   description = "Enable OpenSearch cluster (disable to save ~$300-500/month)"
   type        = bool
-  default     = false
+  default     = false # Enable when vector search is needed
 }
+
+variable "enable_frontend" {
+  description = "Enable React frontend (S3 + CloudFront static site)"
+  type        = bool
+  default     = false # Enable when frontend is ready to deploy
+}
+
+# ── Monitoring ───────────────────────────────────────────────────────────────
 
 variable "log_retention_days" {
   description = "CloudWatch log retention in days"
   type        = number
-  default     = 30
+  default     = 90
 }
 
 variable "alarm_email" {
@@ -47,12 +62,7 @@ variable "alarm_email" {
   default     = ""
 }
 
-# Aurora PostgreSQL variables
-variable "enable_aurora" {
-  description = "Enable Aurora PostgreSQL cluster (disable to save ~$50-100/month)"
-  type        = bool
-  default     = false
-}
+# ── Aurora PostgreSQL ────────────────────────────────────────────────────────
 
 variable "aurora_database_name" {
   description = "Name of the default database"
@@ -83,26 +93,27 @@ variable "aurora_min_capacity" {
 variable "aurora_max_capacity" {
   description = "Maximum ACUs for Aurora Serverless v2"
   type        = number
-  default     = 4.0
+  default     = 8.0
 }
 
 variable "aurora_instance_count" {
   description = "Number of Aurora instances"
   type        = number
-  default     = 1
+  default     = 2 # Writer + reader in prod
 }
 
-# OpenSearch variables
+# ── OpenSearch ───────────────────────────────────────────────────────────────
+
 variable "opensearch_instance_type" {
   description = "Instance type for OpenSearch data nodes"
   type        = string
-  default     = "t3.small.search"
+  default     = "m6g.large.search"
 }
 
 variable "opensearch_instance_count" {
   description = "Number of OpenSearch data nodes"
   type        = number
-  default     = 1
+  default     = 2
 }
 
 variable "opensearch_dedicated_master_enabled" {
@@ -114,13 +125,13 @@ variable "opensearch_dedicated_master_enabled" {
 variable "opensearch_zone_awareness_enabled" {
   description = "Enable multi-AZ deployment"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "opensearch_ebs_volume_size" {
   description = "EBS volume size in GB"
   type        = number
-  default     = 20
+  default     = 50
 }
 
 variable "opensearch_master_user_name" {
@@ -143,42 +154,53 @@ variable "opensearch_create_service_linked_role" {
   default     = true
 }
 
-# Pipeline (Phase 3)
+# ── Pipeline ─────────────────────────────────────────────────────────────────
+
 variable "db_secret_arn" {
-  description = "ARN of Secrets Manager secret with Aurora DB credentials (empty when Aurora disabled)"
+  description = "ARN of Secrets Manager secret with Aurora DB credentials"
   type        = string
   default     = ""
-}
-
-# Phase 6 — Tavily Search
-variable "tavily_api_key" {
-  description = "Tavily Search API key"
-  type        = string
-  default     = ""
-  sensitive   = true
-}
-
-# Phase 4 — Notifications
-variable "ses_sender_email" {
-  description = "Verified SES sender email address for deal alert emails"
-  type        = string
-  default     = ""
-}
-
-variable "messenger_bedrock_model_id"
-  description = "Bedrock model ID for the MessengerAgent"
-  type        = string
-  default     = "anthropic.claude-3-sonnet-20240229-v1:0"
 }
 
 variable "enable_pipeline_schedule" {
   description = "Enable EventBridge schedule to run the pipeline automatically"
   type        = bool
-  default     = false # Disabled by default to prevent unintended executions in dev
+  default     = true # Always-on in prod
 }
 
 variable "pipeline_schedule_expression" {
   description = "EventBridge schedule expression for the pipeline (cron or rate)"
   type        = string
   default     = "rate(15 minutes)"
+}
+
+# ── Notifications ────────────────────────────────────────────────────────────
+
+variable "ses_sender_email" {
+  description = "Verified SES sender email address for deal alert emails"
+  type        = string
+  default     = ""
+}
+
+variable "messenger_bedrock_model_id" {
+  description = "Bedrock model ID for the MessengerAgent"
+  type        = string
+  default     = "anthropic.claude-3-sonnet-20240229-v1:0"
+}
+
+# ── Tavily Search ─────────────────────────────────────────────────────────────
+
+variable "tavily_api_key" {
+  description = "Tavily Search API key for the web search endpoint"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+# ── Cognito Hosted UI ────────────────────────────────────────────────────────
+
+variable "cognito_domain_prefix" {
+  description = "Prefix for Cognito Hosted UI domain (must be globally unique, e.g. 'dealfinder-prod-abc123')"
+  type        = string
+  default     = "dealfinder-prod"
 }

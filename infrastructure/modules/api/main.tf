@@ -30,7 +30,6 @@ resource "aws_cognito_user_pool" "main" {
 
   email_configuration {
     email_sending_account = "COGNITO_DEFAULT"
-    from_email_address    = "DealFinder <no-reply@verificationemail.com>"
   }
 
   schema {
@@ -186,10 +185,10 @@ resource "aws_lambda_function" "api" {
 
   environment {
     variables = {
-      DB_HOST        = var.db_host
-      DB_NAME        = var.db_name
-      DB_SECRET_ARN  = var.db_secret_arn
-      TAVILY_API_KEY = var.tavily_api_key
+      DB_HOST                   = var.db_host
+      DB_NAME                   = var.db_name
+      DB_SECRET_ARN             = var.db_secret_arn
+      DEALFINDER_TAVILY_API_KEY = var.tavily_api_key
     }
   }
 

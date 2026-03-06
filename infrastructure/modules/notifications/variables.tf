@@ -86,7 +86,7 @@ variable "db_name" {
   default     = "dealfinder"
 }
 
-variable "ses_sender_email"
+variable "ses_sender_email" {
   description = "Verified SES sender email address for deal alert emails"
   type        = string
   default     = ""
