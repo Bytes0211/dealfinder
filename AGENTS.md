@@ -6,7 +6,7 @@ This file provides guidance to AI assistants (Claude Code, Warp, etc.) when work
 
 Deal Finder is an AI-powered deal hunting system that discovers deals via RSS feeds, estimates prices using AWS Bedrock (Claude), and sends notifications for high-value opportunities. It's a serverless system on AWS, built by a solo developer.
 
-**Status:** Phase 6 live in production. Post-launch stabilisation complete (Sessions 5–8). Frontend on CloudFront, API Lambda running FastAPI + Mangum, Tavily search with Bedrock enrichment live, Aurora schema fully migrated.
+**Status:** Phase 6 live in production. Post-launch stabilisation complete (Sessions 5–8). Frontend on CloudFront, API Lambda running FastAPI + Mangum, Tavily search with Bedrock enrichment live, Aurora schema fully migrated. Per-feed no-deals notifications live (feature02): users receive a per-feed "still searching" SES email for any saved feed that produced no match in a given pipeline run, with 24-hour rolling dedup per (user, feed) pair.
 
 ## Architecture
 
@@ -28,8 +28,9 @@ React SPA (CloudFront) → API Gateway → Lambda (FastAPI/Mangum) → Aurora
 
 ### Agent Architecture
 - **ScannerAgent**: Scrapes RSS feeds for deals (Lambda)
-- **EvaluatorAgent**: Estimates prices via Bedrock, calculates discounts (Lambda)
-- **MessengerAgent**: Generates personalized notifications using Claude, dispatches via SNS (Lambda)
+- **EvaluatorAgent**: Estimates prices via Bedrock, calculates discounts (Lambda); returns `matched_feed_pairs` list of all `{user_id, feed_id, feed_name}` pairs that matched this deal
+- **PipelineSummaryAgent**: After ProcessDeals Map, aggregates `matched_feed_pairs` from all deals, finds unmatched (user, feed) pairs, enqueues `no_deals_feed` SQS messages with 24h per-pair dedup (Lambda)
+- **MessengerAgent**: Generates personalized notifications using Claude, dispatches via SNS (Lambda); handles `no_deals_feed` event_type with `notify_no_deals_feed` (SES only, per-user)
 
 ### Orchestration Pattern
 AWS Step Functions coordinates the pipeline:
@@ -50,8 +51,9 @@ src/dealfinder/
 │   ├── config.py           # AgentConfig (pydantic-settings, env_prefix=DEALFINDER_)
 │   ├── bedrock.py          # BedrockPriceEstimator, BedrockSearchExtractor
 │   ├── scanner.py          # ScannerAgent + Lambda handler
-│   ├── evaluator.py        # EvaluatorAgent + Lambda handler
-│   └── messenger.py        # MessengerAgent + Lambda handler
+│   ├── evaluator.py        # EvaluatorAgent + Lambda handler; returns matched_feed_pairs
+│   ├── pipeline_summary.py # PipelineSummaryAgent + Lambda handler (per-feed no-deals)
+│   └── messenger.py        # MessengerAgent + Lambda handler; notify_no_deals_feed
 ├── notifications/          # Notification dispatch clients
 │   ├── sns.py              # SnsClient — SMS via boto3 SNS
 │   └── ses.py              # SesClient — send_email() via boto3 sesv2
@@ -81,6 +83,7 @@ tests/
 │   │   ├── test_bedrock.py
 │   │   ├── test_scanner.py
 │   │   ├── test_evaluator.py
+│   │   ├── test_pipeline_summary.py
 │   │   └── test_messenger.py   # Phase 4
 │   ├── notifications/          # Phase 4
 │   │   └── test_ses.py
@@ -259,8 +262,9 @@ Feature flags keep idle costs at ~$4-10/month:
 | `PRODUCTION_PLAN.md` | Revised architecture and phase plan |
 | `developer/project-status.md` | Progress tracking and timeline |
 | `src/dealfinder/agents/scanner.py` | ScannerAgent Lambda (RSS → Aurora) |
-| `src/dealfinder/agents/evaluator.py` | EvaluatorAgent Lambda (Bedrock → discount) |
-| `src/dealfinder/agents/messenger.py` | MessengerAgent Lambda (SQS → SNS/SES) |
+| `src/dealfinder/agents/evaluator.py` | EvaluatorAgent Lambda (Bedrock → discount); returns `matched_feed_pairs` |
+| `src/dealfinder/agents/pipeline_summary.py` | PipelineSummaryAgent Lambda (per-feed no-deals, 24h dedup) |
+| `src/dealfinder/agents/messenger.py` | MessengerAgent Lambda (SQS → SNS/SES); `notify_no_deals_feed` |
 | `src/dealfinder/agents/bedrock.py` | BedrockPriceEstimator, BedrockSearchExtractor |
 | `src/dealfinder/agents/config.py` | AgentConfig pydantic-settings (incl. tavily_api_key) |
 | `src/dealfinder/notifications/sns.py` | SnsClient (boto3 SNS SMS) |

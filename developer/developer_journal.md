@@ -1725,3 +1725,132 @@ to cast the column to `text` first, then update, then cast back to the new enum.
 
 **Session End:** March 6, 2026 06:00 UTC
 **Status:** ✅ Watchlist save fully operational — all DB endpoints restored
+
+---
+
+## Session 9: Feature — Per-Feed No-Deals Notifications (March 6, 2026)
+
+**Date:** March 6, 2026
+**Time:** ~19:00 – 19:55 UTC
+**Branch:** feature02
+**Status:** ✅ COMPLETE — deployed to prod
+
+### Objective
+
+Replace the pipeline-wide "no deals found" notification (one dedup key for all
+users) with per-feed granularity: each user receives a "still searching!"
+email for any of their saved watchlist feeds that produced no deal match in a
+given pipeline run, with a 24-hour rolling dedup per (user, feed) pair.
+
+---
+
+### Actions Taken
+
+#### 1. EvaluatorAgent — collect matched feed pairs
+
+`_notify_watchlist_matches` changed from `-> None` to `-> list[dict]`.
+Removed the early `break` so all matching feeds are recorded (not just the
+first per user). Returns `list[dict]` of `{user_id, feed_id, feed_name}` for
+every `(user, feed)` pair that matched this deal. A separate
+`notified_user_ids` set ensures only one deal-alert SQS message is enqueued
+per user regardless of how many feeds matched.
+
+`evaluate_deal` captures the return and includes `matched_feed_pairs` in its
+return dict on all code paths (empty list for not_found, rejected,
+estimation_failed).
+
+#### 2. PipelineSummaryAgent — complete rewrite
+
+Replaced the pipeline-wide `_should_notify` / `_enqueue_no_deals` approach
+with per-feed logic:
+
+- Added `UserRepository` + `get_async_session` imports (Lambda now reads DB).
+- `_check_and_set_dedup(key)` — generalised DynamoDB conditional write;
+  key format `no-deals-feed#{user_id}#{feed_id}` (24h TTL).
+- `_enqueue_no_deals_feed(user_id, feed_id, feed_name, timestamp)` — publishes
+  `{event_type: "no_deals_feed", ...}` to the notification dispatch SQS queue.
+- `_check_unmatched_feeds(matched_pairs, scanned_at)` — loads all active users,
+  builds matched set from pairs, iterates each user's `saved_feeds`, checks
+  dedup, enqueues for unmatched feeds.
+- `run()` now aggregates `matched_feed_pairs` from all evaluated deals and
+  calls `_check_unmatched_feeds` unconditionally (even on high-value runs, so
+  feeds that didn't match are still tracked).
+
+#### 3. MessengerAgent — notify_no_deals_feed
+
+Added `notify_no_deals_feed(user_id, feed_name, timestamp)`:
+- Formats timestamp human-readable (`%b %-d, %Y %-I:%M %p UTC`).
+- Looks up user by ID via `UserRepository.get_by_id`.
+- Checks `prefs.get("email", False)` — skips silently if disabled.
+- Sends SES email: title `No Deals Found — {feed_name}`, message
+  `"No deals found for '{feed_name}' at {time} — still searching!"`.
+- SES failure logged, not raised.
+
+Added `no_deals_feed` routing in `run()` between the existing `no_deals`
+handler and the deal-id fallthrough.
+
+#### 4. Terraform
+
+`infrastructure/modules/pipeline/main.tf`:
+- Added `DB_HOST`, `DB_NAME`, `DB_SECRET_ARN` env vars to
+  `aws_lambda_function.pipeline_summary`.
+- Added `SecretsManager:GetSecretValue` statement to
+  `aws_iam_role_policy.pipeline_summary_inline`.
+
+Terraform plan: 2 changes (IAM policy inline + Lambda env vars). Applied cleanly.
+
+#### 5. Tests
+
+- `test_evaluator.py` — added `TestEvaluatorMatchedFeedPairs` (3 tests):
+  `matched_feed_pairs` present on evaluated, not_found, rejected paths.
+- `test_pipeline_summary.py` — complete rewrite: `TestCheckAndSetDedup` (4),
+  `TestCheckUnmatchedFeeds` (6), `TestPipelineSummaryAgentRun` (4).
+- `test_messenger.py` — added `TestNotifyNoDealsFeed` (6) and
+  `TestMessengerRunNoDealsPerFeedRouting` (2).
+
+**Result:** 346 passed, 41 skipped (infra) — all green.
+
+#### 6. Deployment
+
+```
+terraform apply   # 2 changes: IAM + Lambda env vars
+./scripts/deploy-lambda.sh prod pipeline-summary messenger evaluator
+```
+
+All three Lambdas deployed successfully.
+
+---
+
+### Issues Encountered
+
+**Indentation regression in evaluator.py:**
+The `return {"status": "not_found"}` block lost one level of indentation during
+editing, causing it to execute unconditionally (every call returned `not_found`).
+Caught immediately by the test suite (10 failures). Fixed by restoring the
+`return` inside the `if not deal:` block.
+
+**Lesson:** Always run the test suite immediately after editing; structural
+indentation bugs in Python are easy to introduce and the tests catch them fast.
+
+---
+
+### Lessons Learned
+
+1. **Per-user dedup keys scale correctly; pipeline-wide keys don't** — a single
+   `no-deals-notif` key silenced notifications for all users if any run had
+   already fired within 24 hours. Per-(user, feed) keys are independent and
+   give each user the right signal for each of their feeds.
+
+2. **Terraform must precede code deploy when adding env vars** — deploying the
+   new code before `terraform apply` would have caused `pipeline_summary` to
+   fail on cold start (missing DB env vars). Always apply infra first.
+
+3. **Return-type changes surface hidden coupling** — changing
+   `_notify_watchlist_matches` from `None` to `list[dict]` required touching
+   `evaluate_deal` at every return path. Designing return types up front avoids
+   this scatter.
+
+---
+
+**Session End:** March 6, 2026 19:55 UTC
+**Status:** ✅ Per-feed no-deals notifications live in production
