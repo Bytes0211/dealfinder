@@ -82,9 +82,19 @@ export function PreferencesPage() {
           {isError && (
             <p className="form-feedback form-feedback--error">
               Failed to save:{' '}
-              {isAxiosError(prefsError) && prefsError.response?.data?.detail
-                ? String(prefsError.response.data.detail)
-                : 'An unexpected error occurred.'}
+              {(() => {
+                console.error('[PreferencesPage] save error:', prefsError);
+                if (isAxiosError(prefsError) && prefsError.response) {
+                  const d = prefsError.response.data;
+                  return d?.detail
+                    ? String(d.detail)
+                    : `HTTP ${prefsError.response.status}: ${JSON.stringify(d)}`;
+                }
+                if (isAxiosError(prefsError)) {
+                  return `Network error: ${prefsError.message}`;
+                }
+                return String(prefsError);
+              })()}
             </p>
           )}
         </form>
