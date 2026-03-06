@@ -2,11 +2,11 @@ terraform {
   required_version = ">= 1.14"
 
   backend "s3" {
-    bucket         = "dealfinder-terraform-state-dev"
-    key            = "dev/terraform.tfstate"
-    region         = "us-east-1"
-    encrypt        = true
-    dynamodb_table = "dealfinder-terraform-locks"
+    bucket       = "dealfinder-terraform-state-prod"
+    key          = "prod/terraform.tfstate"
+    region       = "us-east-1"
+    encrypt      = true
+    use_lockfile = true
   }
 
   required_providers {
@@ -37,7 +37,8 @@ locals {
   }
 }
 
-# Networking Module
+# ── Networking ──────────────────────────────────────────────────────────────
+
 module "networking" {
   source = "../../modules/networking"
 
@@ -50,7 +51,8 @@ module "networking" {
   tags = local.common_tags
 }
 
-# S3 Storage Module
+# ── Storage ─────────────────────────────────────────────────────────────────
+
 module "s3" {
   source = "../../modules/data/s3"
 
@@ -60,7 +62,6 @@ module "s3" {
   tags = local.common_tags
 }
 
-# DynamoDB Module
 module "dynamodb" {
   source = "../../modules/data/dynamodb"
 
@@ -70,7 +71,8 @@ module "dynamodb" {
   tags = local.common_tags
 }
 
-# CloudWatch Monitoring Module
+# ── Monitoring ──────────────────────────────────────────────────────────────
+
 module "cloudwatch" {
   source = "../../modules/monitoring/cloudwatch"
 
@@ -80,10 +82,14 @@ module "cloudwatch" {
   log_retention_days = var.log_retention_days
   alarm_email        = var.alarm_email
 
+  # AWS allows only one DIMENSIONAL anomaly monitor per account; dev already owns it
+  create_cost_anomaly_monitor = false
+
   tags = local.common_tags
 }
 
-# Aurora PostgreSQL Module (Phase 2)
+# ── Aurora PostgreSQL ───────────────────────────────────────────────────────
+
 module "aurora" {
   source = "../../modules/data/aurora"
   count  = var.enable_aurora ? 1 : 0
@@ -95,29 +101,26 @@ module "aurora" {
   private_subnet_ids = module.networking.private_subnet_ids
   availability_zones = module.networking.availability_zones
 
-  # Database configuration
   database_name   = var.aurora_database_name
   master_username = var.aurora_master_username
   master_password = var.aurora_master_password
 
-  # Serverless v2 scaling
   min_capacity   = var.aurora_min_capacity
   max_capacity   = var.aurora_max_capacity
   instance_count = var.aurora_instance_count
 
-  # Cost optimization for dev
-  deletion_protection         = false
-  enable_performance_insights = false
-  monitoring_interval         = 0
+  deletion_protection         = true
+  enable_performance_insights = true
+  monitoring_interval         = 60
 
-  # Alarms
   create_cloudwatch_alarms = true
   alarm_sns_topic_arn      = module.cloudwatch.alarms_topic_arn
 
   tags = local.common_tags
 }
 
-# OpenSearch Module (Phase 2)
+# ── OpenSearch ──────────────────────────────────────────────────────────────
+
 module "opensearch" {
   source = "../../modules/data/opensearch"
   count  = var.enable_opensearch ? 1 : 0
@@ -128,32 +131,53 @@ module "opensearch" {
   vpc_cidr           = module.networking.vpc_cidr
   private_subnet_ids = module.networking.private_subnet_ids
 
-  # Cluster configuration (cost-optimized for dev)
   instance_type            = var.opensearch_instance_type
   instance_count           = var.opensearch_instance_count
   dedicated_master_enabled = var.opensearch_dedicated_master_enabled
   zone_awareness_enabled   = var.opensearch_zone_awareness_enabled
   ebs_volume_size          = var.opensearch_ebs_volume_size
 
-  # Security
   enable_fine_grained_access = true
   master_user_name           = var.opensearch_master_user_name
   master_user_password       = var.opensearch_master_user_password
 
-  # Snapshots
-  create_snapshot_bucket = true
-
-  # Service-linked role (set to false if already exists)
+  create_snapshot_bucket     = true
   create_service_linked_role = var.opensearch_create_service_linked_role
 
-  # Alarms
   create_cloudwatch_alarms = true
   alarm_sns_topic_arn      = module.cloudwatch.alarms_topic_arn
 
   tags = local.common_tags
 }
 
-# Notifications Module (Phase 4)
+# ── Pipeline ────────────────────────────────────────────────────────────────
+
+module "pipeline" {
+  source = "../../modules/pipeline"
+
+  project_name       = var.project_name
+  environment        = var.environment
+  aws_region         = var.aws_region
+  vpc_id             = module.networking.vpc_id
+  vpc_cidr           = module.networking.vpc_cidr
+  private_subnet_ids = module.networking.private_subnet_ids
+
+  log_retention_days       = var.log_retention_days
+  alarm_sns_topic_arn      = module.cloudwatch.alarms_topic_arn
+  create_cloudwatch_alarms = true
+
+  enable_schedule     = var.enable_pipeline_schedule
+  schedule_expression = var.pipeline_schedule_expression
+
+  db_secret_arn = var.db_secret_arn
+  db_host       = try(module.aurora[0].cluster_endpoint, "")
+  db_name       = var.aurora_database_name
+
+  tags = local.common_tags
+}
+
+# ── Notifications ───────────────────────────────────────────────────────────
+
 module "notifications" {
   source = "../../modules/notifications"
 
@@ -164,23 +188,24 @@ module "notifications" {
   vpc_cidr           = module.networking.vpc_cidr
   private_subnet_ids = module.networking.private_subnet_ids
 
-  lambda_security_group_id = module.pipeline.lambda_security_group_id
-
+  lambda_security_group_id        = module.pipeline.lambda_security_group_id
   notification_dispatch_queue_arn = module.pipeline.notification_dispatch_queue_arn
 
-  log_retention_days  = var.log_retention_days
-  alarm_sns_topic_arn = module.cloudwatch.alarms_topic_arn
+  log_retention_days       = var.log_retention_days
+  alarm_sns_topic_arn      = module.cloudwatch.alarms_topic_arn
+  create_cloudwatch_alarms = true
 
-  bedrock_model_id   = var.messenger_bedrock_model_id
-  db_secret_arn      = var.db_secret_arn
-  db_host            = try(module.aurora[0].cluster_endpoint, "")
-  db_name            = var.aurora_database_name
-  ses_sender_email   = var.ses_sender_email
+  bedrock_model_id    = var.messenger_bedrock_model_id
+  db_secret_arn       = var.db_secret_arn
+  db_host             = try(module.aurora[0].cluster_endpoint, "")
+  db_name             = var.aurora_database_name
+  ses_sender_email    = var.ses_sender_email
 
   tags = local.common_tags
 }
 
-# API Module (Phase 4)
+# ── API ─────────────────────────────────────────────────────────────────────
+
 module "api" {
   source = "../../modules/api"
 
@@ -193,8 +218,9 @@ module "api" {
 
   lambda_security_group_id = module.pipeline.lambda_security_group_id
 
-  log_retention_days  = var.log_retention_days
-  alarm_sns_topic_arn = module.cloudwatch.alarms_topic_arn
+  log_retention_days       = var.log_retention_days
+  alarm_sns_topic_arn      = module.cloudwatch.alarms_topic_arn
+  create_cloudwatch_alarms = true
 
   db_secret_arn  = var.db_secret_arn
   db_host        = try(module.aurora[0].cluster_endpoint, "")
@@ -202,44 +228,31 @@ module "api" {
   tavily_api_key = var.tavily_api_key
   sns_topic_arn  = module.notifications.sns_topic_arn
 
-  # Cognito Hosted UI
-  cognito_domain_prefix = "dealfinder-dev"
-  cognito_callback_urls = ["https://d3m3flgtpjwfg2.cloudfront.net/auth/callback", "http://localhost:5173/auth/callback"]
-  cognito_logout_urls   = ["https://d3m3flgtpjwfg2.cloudfront.net/login", "http://localhost:5173/login"]
+  cognito_domain_prefix = var.cognito_domain_prefix
+  cognito_callback_urls = var.enable_frontend ? [
+    "https://${module.frontend[0].cloudfront_domain_name}/auth/callback",
+    "http://localhost:5173/auth/callback",
+  ] : ["http://localhost:5173/auth/callback"]
+  cognito_logout_urls = var.enable_frontend ? [
+    "https://${module.frontend[0].cloudfront_domain_name}/login",
+    "http://localhost:5173/login",
+  ] : ["http://localhost:5173/login"]
+
+  cors_allowed_origins = var.enable_frontend ? [
+    "https://${module.frontend[0].cloudfront_domain_name}",
+  ] : ["*"]
 
   tags = local.common_tags
 }
 
-# Frontend Module (Phase 6)
+# ── Frontend (Phase 6) ──────────────────────────────────────────────────────
+
 module "frontend" {
   source = "../../modules/frontend"
+  count  = var.enable_frontend ? 1 : 0
 
   project_name = var.project_name
   environment  = var.environment
-
-  tags = local.common_tags
-}
-
-# Pipeline Module (Phase 3)
-module "pipeline" {
-  source = "../../modules/pipeline"
-
-  project_name       = var.project_name
-  environment        = var.environment
-  aws_region         = var.aws_region
-  vpc_id             = module.networking.vpc_id
-  vpc_cidr           = module.networking.vpc_cidr
-  private_subnet_ids = module.networking.private_subnet_ids
-
-  log_retention_days  = var.log_retention_days
-  alarm_sns_topic_arn = module.cloudwatch.alarms_topic_arn
-
-  enable_schedule     = var.enable_pipeline_schedule
-  schedule_expression = var.pipeline_schedule_expression
-
-  db_secret_arn = var.db_secret_arn
-  db_host       = try(module.aurora[0].cluster_endpoint, "")
-  db_name       = var.aurora_database_name
 
   tags = local.common_tags
 }

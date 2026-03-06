@@ -185,10 +185,10 @@ resource "aws_lambda_function" "api" {
 
   environment {
     variables = {
-      DB_HOST        = var.db_host
-      DB_NAME        = var.db_name
-      DB_SECRET_ARN  = var.db_secret_arn
-      TAVILY_API_KEY = var.tavily_api_key
+      DB_HOST                   = var.db_host
+      DB_NAME                   = var.db_name
+      DB_SECRET_ARN             = var.db_secret_arn
+      DEALFINDER_TAVILY_API_KEY = var.tavily_api_key
     }
   }
 

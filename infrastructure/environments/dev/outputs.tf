@@ -43,7 +43,8 @@ output "user_sessions_table" {
   value       = module.dynamodb.user_sessions_table_name
 }
 
-# Monitoring Outputs
+# ── Monitoring ───────────────────────────────────────────────────────────────
+
 output "application_log_group" {
   description = "Name of the application CloudWatch log group"
   value       = module.cloudwatch.application_log_group_name
@@ -64,7 +65,8 @@ output "dashboard_name" {
   value       = module.cloudwatch.dashboard_name
 }
 
-# Aurora outputs (Phase 2)
+# ── Aurora ───────────────────────────────────────────────────────────────────
+
 output "aurora_cluster_endpoint" {
   description = "Aurora cluster writer endpoint"
   value       = var.enable_aurora ? module.aurora[0].cluster_endpoint : null
@@ -85,39 +87,8 @@ output "aurora_security_group_id" {
   value       = var.enable_aurora ? module.aurora[0].security_group_id : null
 }
 
-# API outputs (Phase 4)
-output "api_endpoint" {
-  description = "Base URL of the API Gateway HTTP API"
-  value       = module.api.api_endpoint
-}
+# ── OpenSearch ───────────────────────────────────────────────────────────────
 
-output "cognito_client_id" {
-  description = "Cognito user pool client ID"
-  value       = module.api.cognito_client_id
-}
-
-output "cognito_hosted_ui_domain" {
-  description = "Cognito Hosted UI domain"
-  value       = module.api.cognito_hosted_ui_domain
-}
-
-# Frontend outputs (Phase 6)
-output "frontend_bucket_name" {
-  description = "S3 bucket name for the React frontend"
-  value       = module.frontend.bucket_name
-}
-
-output "frontend_cloudfront_distribution_id" {
-  description = "CloudFront distribution ID for the frontend"
-  value       = module.frontend.cloudfront_distribution_id
-}
-
-output "frontend_url" {
-  description = "Public HTTPS URL for the frontend"
-  value       = module.frontend.frontend_url
-}
-
-# OpenSearch outputs (Phase 2)
 output "opensearch_endpoint" {
   description = "OpenSearch domain endpoint"
   value       = var.enable_opensearch ? module.opensearch[0].domain_endpoint : null
@@ -133,7 +104,46 @@ output "opensearch_security_group_id" {
   value       = var.enable_opensearch ? module.opensearch[0].security_group_id : null
 }
 
-output "opensearch_snapshot_bucket" {
-  description = "OpenSearch snapshot S3 bucket"
-  value       = var.enable_opensearch ? module.opensearch[0].snapshot_bucket_name : null
+# ── API ─────────────────────────────────────────────────────────────────────
+
+output "api_endpoint" {
+  description = "Base URL of the API Gateway HTTP API"
+  value       = module.api.api_endpoint
+}
+
+output "cognito_client_id" {
+  description = "Cognito user pool client ID"
+  value       = module.api.cognito_client_id
+}
+
+output "cognito_user_pool_endpoint" {
+  description = "Cognito user pool endpoint (use to derive Hosted UI domain)"
+  value       = module.api.cognito_user_pool_endpoint
+}
+
+output "cognito_hosted_ui_domain" {
+  description = "Cognito Hosted UI base domain"
+  value       = module.api.cognito_hosted_ui_domain
+}
+
+# ── Frontend (Phase 6) ───────────────────────────────────────────────────────
+
+output "frontend_bucket_name" {
+  description = "S3 bucket name for the React frontend assets"
+  value       = var.enable_frontend ? module.frontend[0].bucket_name : null
+}
+
+output "cloudfront_distribution_id" {
+  description = "CloudFront distribution ID for the frontend"
+  value       = var.enable_frontend ? module.frontend[0].cloudfront_distribution_id : null
+}
+
+output "cloudfront_domain_name" {
+  description = "CloudFront domain name (use as the app URL before custom domain)"
+  value       = var.enable_frontend ? module.frontend[0].cloudfront_domain_name : null
+}
+
+output "frontend_url" {
+  description = "Frontend application URL"
+  value       = var.enable_frontend ? module.frontend[0].frontend_url : null
 }
