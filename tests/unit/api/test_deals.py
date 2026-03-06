@@ -34,15 +34,6 @@ class TestListDeals:
         assert body["total"] == 1
         assert body["items"][0]["title"] == deal.title
 
-    def test_filters_by_category(self, client, deal) -> None:
-        """Category filter should return matching deals only."""
-        response = client.get("/api/v1/deals", params={"category": "electronics"})
-        assert response.status_code == 200
-        assert response.json()["total"] == 1
-
-        response = client.get("/api/v1/deals", params={"category": "clothing"})
-        assert response.json()["total"] == 0
-
     def test_filters_by_status(self, client, deal) -> None:
         """Status filter should accept valid DealStatus values."""
         response = client.get("/api/v1/deals", params={"status": "evaluated"})

@@ -67,14 +67,12 @@ class TestDealSourceModel:
         source = DealSource(
             name="Test Source",
             url="https://example.com/feed.rss",
-            category="electronics",
             is_active=True,
             check_interval_minutes=15,
         )
 
         assert source.name == "Test Source"
         assert source.url == "https://example.com/feed.rss"
-        assert source.category == "electronics"
         assert source.is_active is True
         assert source.check_interval_minutes == 15
 
@@ -113,7 +111,6 @@ class TestDealModel:
             original_price=Decimal("999.99"),
             sale_price=Decimal("499.99"),
             discount_percentage=Decimal("50.00"),
-            category="electronics",
             brand="TechBrand",
         )
 

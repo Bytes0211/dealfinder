@@ -37,7 +37,7 @@ export function logout(): void {
   localStorage.removeItem(USER_ID_KEY);
   const params = new URLSearchParams({
     client_id: authConfig.clientId,
-    logout_uri: window.location.origin,
+    logout_uri: `${window.location.origin}/login`,
   });
   window.location.href = `https://${authConfig.cognitoDomain}/logout?${params}`;
 }

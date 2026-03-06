@@ -58,8 +58,6 @@ class TestDealIndex:
         assert properties["sale_price"]["type"] == "float"
         assert properties["discount_percentage"]["type"] == "float"
 
-        # Check categorization fields
-        assert properties["category"]["type"] == "keyword"
         assert properties["brand"]["type"] == "keyword"
         assert properties["tags"]["type"] == "keyword"
 

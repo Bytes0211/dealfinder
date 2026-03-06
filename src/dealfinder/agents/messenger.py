@@ -70,8 +70,6 @@ def _build_notification_prompt(deal: Deal) -> str:
     ]
     if deal.brand:
         lines.append(f"Brand: {deal.brand}")
-    if deal.category:
-        lines.append(f"Category: {deal.category}")
     lines.extend([
         f"Sale price: ${sale:.2f}",
         f"Estimated retail value: ${estimated:.2f}",

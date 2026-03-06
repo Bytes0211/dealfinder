@@ -74,7 +74,6 @@ async def source(session) -> DealSource:
     src = DealSource(
         name="Test Feed",
         url="https://example.com/feed.rss",
-        category="electronics",
         is_active=True,
     )
     session.add(src)

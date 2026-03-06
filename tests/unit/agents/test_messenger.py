@@ -33,7 +33,6 @@ def _make_deal(
     estimated_value: float = 100.0,
     discount_percentage: float = 50.0,
     brand: str = "TestBrand",
-    category: str = "electronics",
 ) -> Deal:
     """Create an in-memory Deal for testing."""
     source = DealSource(name="Test Feed", url="https://example.com/feed.rss")
@@ -50,7 +49,6 @@ def _make_deal(
         discount_percentage=Decimal(str(discount_percentage)),
         is_high_value=True,
         brand=brand,
-        category=category,
         status=DealStatus.EVALUATED,
     )
     return deal

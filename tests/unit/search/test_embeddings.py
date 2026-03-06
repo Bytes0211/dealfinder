@@ -124,7 +124,6 @@ class TestEmbeddingService:
         deal = {
             "title": "Great Laptop Deal",
             "description": "50% off all laptops",
-            "category": "electronics",
             "brand": "TechBrand",
         }
 

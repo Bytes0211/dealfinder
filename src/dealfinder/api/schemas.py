@@ -27,8 +27,7 @@ class DealResponse(BaseModel):
         original_price: Original retail price (if available).
         estimated_value: Bedrock-estimated fair market value.
         discount_percentage: Calculated discount percentage.
-        is_high_value: Whether the deal meets the discount threshold.
-        category: Product category.
+    is_high_value: True if the deal meets the discount threshold.
         brand: Brand name.
         status: Deal processing status.
         source_name: Name of the RSS feed source.
@@ -42,7 +41,6 @@ class DealResponse(BaseModel):
     estimated_value: Optional[Decimal] = None
     discount_percentage: Optional[Decimal] = None
     is_high_value: bool
-    category: Optional[str] = None
     brand: Optional[str] = None
     status: str
     source_name: Optional[str] = None

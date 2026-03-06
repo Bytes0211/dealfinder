@@ -73,8 +73,6 @@ class DealIndex:
                     "estimated_value": {"type": "float"},
                     "discount_percentage": {"type": "float"},
                     "currency": {"type": "keyword"},
-                    # Categorization
-                    "category": {"type": "keyword"},
                     "brand": {"type": "keyword"},
                     "tags": {"type": "keyword"},
                     # Status

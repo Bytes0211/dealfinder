@@ -110,7 +110,6 @@ class BedrockPriceEstimator:
         title: str,
         sale_price: Decimal,
         description: str | None = None,
-        category: str | None = None,
         brand: str | None = None,
     ) -> str:
         """Build a structured price estimation prompt for Claude.
@@ -119,7 +118,6 @@ class BedrockPriceEstimator:
             title: Product title or name.
             sale_price: Current sale price of the item.
             description: Optional product description (sanitized and truncated to 500 chars).
-            category: Optional product category.
             brand: Optional brand name.
 
         Returns:
@@ -132,8 +130,6 @@ class BedrockPriceEstimator:
         ]
         if brand:
             lines.append(f"Brand: {_sanitize(brand)}")
-        if category:
-            lines.append(f"Category: {_sanitize(category)}")
         if description:
             lines.append(f"Description: {_sanitize(description)}")
         lines.append(f"Current sale price: ${sale_price}")
@@ -188,7 +184,6 @@ class BedrockPriceEstimator:
         title: str,
         sale_price: Decimal,
         description: str | None = None,
-        category: str | None = None,
         brand: str | None = None,
     ) -> PriceEstimationResult:
         """Estimate the fair market price for a deal using Claude.
@@ -197,7 +192,6 @@ class BedrockPriceEstimator:
             title: Product title.
             sale_price: Current sale price.
             description: Optional product description.
-            category: Optional product category.
             brand: Optional brand name.
 
         Returns:
@@ -207,7 +201,7 @@ class BedrockPriceEstimator:
             ClientError: If the Bedrock API call fails.
             ValueError: If the Claude response cannot be parsed as valid price data.
         """
-        prompt = self._build_prompt(title, sale_price, description, category, brand)
+        prompt = self._build_prompt(title, sale_price, description, brand)
         body = json.dumps({
             "anthropic_version": "bedrock-2023-05-31",
             "max_tokens": 256,

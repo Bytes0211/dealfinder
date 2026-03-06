@@ -1,7 +1,7 @@
 """Deal endpoints for the Deal Finder REST API.
 
 Endpoints:
-    GET /deals        — paginated list with optional category filter
+    GET /deals        — paginated list with optional status filter
     GET /deals/top    — high-value deals sorted by discount percentage
     GET /deals/{id}   — single deal detail
 """
@@ -26,7 +26,6 @@ router = APIRouter(prefix="/deals", tags=["deals"])
 
 @router.get("", response_model=DealListResponse, summary="List deals")
 async def list_deals(
-    category: Optional[str] = Query(None, description="Filter by category"),
     status_filter: Optional[str] = Query(None, alias="status", description="Filter by status"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
@@ -35,7 +34,6 @@ async def list_deals(
     """Return a paginated list of deals.
 
     Args:
-        category: Optional category filter.
         status_filter: Optional status filter (e.g. ``evaluated``, ``notified``).
         limit: Maximum number of results to return (default 50, max 200).
         offset: Number of results to skip for pagination.
@@ -47,9 +45,6 @@ async def list_deals(
     query = select(Deal).options(selectinload(Deal.source))
     count_query = select(func.count()).select_from(Deal)
 
-    if category:
-        query = query.where(Deal.category == category)
-        count_query = count_query.where(Deal.category == category)
     if status_filter:
         try:
             deal_status = DealStatus(status_filter)
@@ -79,7 +74,6 @@ async def list_deals(
             estimated_value=deal.estimated_value,
             discount_percentage=deal.discount_percentage,
             is_high_value=deal.is_high_value,
-            category=deal.category,
             brand=deal.brand,
             status=deal.status.value,
             source_name=deal.source.name if deal.source else None,
@@ -121,7 +115,6 @@ async def top_deals(
             estimated_value=deal.estimated_value,
             discount_percentage=deal.discount_percentage,
             is_high_value=deal.is_high_value,
-            category=deal.category,
             brand=deal.brand,
             status=deal.status.value,
             source_name=deal.source.name if deal.source else None,
@@ -162,7 +155,6 @@ async def get_deal(deal_id: UUID, db: AsyncSession = Depends(get_db)) -> DealRes
         estimated_value=deal.estimated_value,
         discount_percentage=deal.discount_percentage,
         is_high_value=deal.is_high_value,
-        category=deal.category,
         brand=deal.brand,
         status=deal.status.value,
         source_name=deal.source.name if deal.source else None,

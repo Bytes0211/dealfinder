@@ -396,7 +396,6 @@ async def watchlist_matches(
             estimated_value=deal.estimated_value,
             discount_percentage=deal.discount_percentage,
             is_high_value=deal.is_high_value,
-            category=deal.category,
             brand=deal.brand,
             status=deal.status.value,
             source_name=deal.source.name if deal.source else None,

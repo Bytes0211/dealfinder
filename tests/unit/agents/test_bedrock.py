@@ -45,16 +45,14 @@ class TestBuildPrompt:
         assert "49.99" in prompt
 
     def test_prompt_includes_optional_fields(self, estimator: BedrockPriceEstimator) -> None:
-        """Optional brand, category, and description should appear when provided."""
+        """Optional brand and description should appear when provided."""
         prompt = estimator._build_prompt(
             title="Headphones",
             sale_price=Decimal("100.00"),
             description="Noise-cancelling",
-            category="electronics",
             brand="Bose",
         )
         assert "Bose" in prompt
-        assert "electronics" in prompt
         assert "Noise-cancelling" in prompt
 
     def test_prompt_omits_missing_optional_fields(self, estimator: BedrockPriceEstimator) -> None:
@@ -64,7 +62,6 @@ class TestBuildPrompt:
             sale_price=Decimal("10.00"),
         )
         assert "Brand:" not in prompt
-        assert "Category:" not in prompt
         assert "Description:" not in prompt
 
     def test_prompt_truncates_long_description(self, estimator: BedrockPriceEstimator) -> None:

@@ -18,7 +18,6 @@ export function DealCard({ deal }: Props) {
       </div>
 
       <div className="deal-card-meta">
-        {deal.category && <span className="tag">{deal.category}</span>}
         {deal.brand && <span className="tag">{deal.brand}</span>}
         {deal.source_name && <span className="tag tag--muted">{deal.source_name}</span>}
       </div>

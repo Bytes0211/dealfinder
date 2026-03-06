@@ -97,7 +97,6 @@ async def source(session) -> DealSource:
     src = DealSource(
         name="Test Feed",
         url="https://example.com/feed.rss",
-        category="electronics",
         is_active=True,
     )
     session.add(src)
@@ -120,7 +119,6 @@ async def deal(session, source) -> Deal:
         estimated_value=Decimal("320.00"),
         discount_percentage=Decimal("48.57"),
         is_high_value=True,
-        category="electronics",
         brand="Sony",
         status=DealStatus.EVALUATED,
     )

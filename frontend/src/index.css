@@ -219,38 +219,6 @@ h1 { font-size: 1.6rem; font-weight: 700; }
   padding: .1rem 0;
 }
 
-/* ── Category browse panel ────────────────────────── */
-.category-browse { position: relative; display: inline-block; }
-.category-browse__panel {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  z-index: 150;
-  background: var(--c-surface);
-  border: 1px solid var(--c-border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  padding: .5rem;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: .15rem .75rem;
-  min-width: 320px;
-  max-height: 280px;
-  overflow-y: auto;
-}
-.category-browse__item {
-  display: flex;
-  align-items: center;
-  gap: .4rem;
-  padding: .25rem .35rem;
-  font-size: .8rem;
-  font-weight: 400;
-  border-radius: 4px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.category-browse__item:hover { background: var(--c-bg); }
-.category-browse__item input[type="checkbox"] { accent-color: var(--c-primary); cursor: pointer; }
 
 /* ── Info tooltip ─────────────────────────────────── */
 .form-label-row { display: inline-flex; align-items: center; gap: .35rem; }
@@ -286,10 +254,7 @@ h1 { font-size: 1.6rem; font-weight: 700; }
 .info-tooltip:hover .info-tooltip-bubble,
 .info-tooltip-icon:focus + .info-tooltip-bubble { visibility: visible; opacity: 1; }
 
-/* ── Category picker ──────────────────────────────── */
-.category-picker { display: flex; gap: .5rem; flex-wrap: wrap; }
-
-/* ── Saved feeds panel ─────────────────────────────── */
+/* ── Saved feeds panel
 .saved-feeds-panel {
   display: flex;
   align-items: center;

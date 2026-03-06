@@ -246,7 +246,7 @@ class EmbeddingService:
     async def embed_deal(self, deal: dict[str, Any]) -> list[float]:
         """Generate embedding for a deal.
 
-        Combines title, description, and category into a single embedding.
+        Combines title, description, and brand into a single embedding.
 
         Args:
             deal: Deal data dictionary.
@@ -260,8 +260,6 @@ class EmbeddingService:
             parts.append(deal["title"])
         if deal.get("description"):
             parts.append(deal["description"][:500])  # Truncate long descriptions
-        if deal.get("category"):
-            parts.append(f"Category: {deal['category']}")
         if deal.get("brand"):
             parts.append(f"Brand: {deal['brand']}")
 

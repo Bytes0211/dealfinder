@@ -76,7 +76,6 @@ class DealSource(Base):
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     url: Mapped[str] = mapped_column(String(2048), nullable=False, unique=True)
-    category: Mapped[Optional[str]] = mapped_column(String(100))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     check_interval_minutes: Mapped[int] = mapped_column(Integer, default=15)
     last_checked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
@@ -95,7 +94,6 @@ class DealSource(Base):
 
     __table_args__ = (
         Index("ix_deal_sources_is_active", "is_active"),
-        Index("ix_deal_sources_category", "category"),
     )
 
 
@@ -122,8 +120,6 @@ class Deal(Base):
     discount_percentage: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 2))
     currency: Mapped[str] = mapped_column(String(3), default="USD")
     
-    # Categorization
-    category: Mapped[Optional[str]] = mapped_column(String(100))
     brand: Mapped[Optional[str]] = mapped_column(String(255))
     tags: Mapped[Optional[list]] = mapped_column(JSONB, default=list)
     
@@ -167,7 +163,6 @@ class Deal(Base):
         Index("ix_deals_status", "status"),
         Index("ix_deals_is_high_value", "is_high_value"),
         Index("ix_deals_discovered_at", "discovered_at"),
-        Index("ix_deals_category", "category"),
         Index("ix_deals_discount_percentage", "discount_percentage"),
     )
 

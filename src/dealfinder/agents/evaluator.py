@@ -142,7 +142,6 @@ class EvaluatorAgent:
                         title=deal.title,
                         sale_price=sale_price,
                         description=deal.description,
-                        category=deal.category,
                         brand=deal.brand,
                     ),
                 )
@@ -183,7 +182,6 @@ class EvaluatorAgent:
                 inference_time_ms=result.inference_time_ms,
                 features_used={
                     "title": deal.title,
-                    "category": deal.category,
                     "brand": deal.brand,
                     "description": deal.description[:500] if deal.description else None,
                 },

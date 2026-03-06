@@ -8,7 +8,6 @@ export interface DealResponse {
   estimated_value: string | null;
   discount_percentage: string | null;
   is_high_value: boolean;
-  category: string | null;
   brand: string | null;
   status: string;
   source_name: string | null;
@@ -55,7 +54,6 @@ export interface UserPreferencesUpdate {
 
 /** Query parameters for GET /deals. */
 export interface DealFilters {
-  category?: string;
   status?: string;
   limit?: number;
   offset?: number;

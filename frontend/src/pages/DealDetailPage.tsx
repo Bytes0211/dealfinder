@@ -46,7 +46,6 @@ export function DealDetailPage() {
             {row('Discount', deal.discount_percentage
               ? `${parseFloat(deal.discount_percentage).toFixed(1)}%`
               : null)}
-            {row('Category', deal.category)}
             {row('Brand', deal.brand)}
             {row('Source', deal.source_name)}
             {row('Status', deal.status)}
