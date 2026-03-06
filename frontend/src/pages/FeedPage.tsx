@@ -31,7 +31,8 @@ export function FeedPage() {
   const { mutate: savePrefs } = useUpdatePreferences(userId);
 
   const savedFeeds: SavedFeed[] =
-    ((userPrefs?.notification_preferences?.saved_feeds as SavedFeed[] | undefined) ?? []);
+    ((userPrefs?.notification_preferences?.saved_feeds as SavedFeed[] | undefined) ?? [])
+      .filter((f) => f.id && f.title && f.url);
 
   const {
     data: matchData,
@@ -97,7 +98,9 @@ export function FeedPage() {
                   >
                     {feed.title}
                   </a>
-                  <span className="watchlist-card-query">"{feed.query}"</span>
+                  {feed.query && (
+                    <span className="watchlist-card-query">"{feed.query}"</span>
+                  )}
                   <div className="watchlist-card-meta">
                     {feed.current_price && (
                       <span className="watchlist-card-price">{feed.current_price}</span>

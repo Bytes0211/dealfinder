@@ -92,7 +92,8 @@ export function SearchPage() {
     }
 
     const existing: SavedFeed[] =
-      ((userPrefs?.notification_preferences?.saved_feeds as SavedFeed[] | undefined) ?? []);
+      ((userPrefs?.notification_preferences?.saved_feeds as SavedFeed[] | undefined) ?? [])
+        .filter((f) => f.id && f.title && f.url);
 
     const newFeeds: SavedFeed[] = selected.map(({ r, i }) => ({
       id: crypto.randomUUID(),
