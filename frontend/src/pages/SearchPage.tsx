@@ -114,10 +114,18 @@ export function SearchPage() {
           setSaveMsg(`${newFeeds.length} feed${newFeeds.length !== 1 ? 's' : ''} saved ✔`);
         },
         onError: (err) => {
-          const detail =
-            isAxiosError(err) && err.response?.data?.detail
-              ? String(err.response.data.detail)
-              : 'An unexpected error occurred.';
+          console.error('[SearchPage] save error:', err);
+          let detail: string;
+          if (isAxiosError(err) && err.response) {
+            const d = err.response.data;
+            detail = d?.detail
+              ? String(d.detail)
+              : `HTTP ${err.response.status}: ${JSON.stringify(d)}`;
+          } else if (isAxiosError(err)) {
+            detail = `Network error: ${err.message}`;
+          } else {
+            detail = String(err);
+          }
           setSaveMsg(`Failed to save: ${detail}`);
         },
       },
