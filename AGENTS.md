@@ -149,6 +149,7 @@ frontend/
       deal = await repo.get_by_id(deal_id)
   ```
   Sessions auto-commit on success, rollback on exception.
+- **Concurrent inserts:** Use `async with session.begin_nested()` (SAVEPOINT) around `repo.create()` when a unique-constraint violation from a concurrent request is possible. The SAVEPOINT rolls back only the failed INSERT, leaving the outer transaction healthy for a retry query. Never query on a session after a bare `IntegrityError` without first rolling back or using a SAVEPOINT.
 
 ### Repository Pattern
 - All data access goes through repository classes in `data/repository.py`.
@@ -215,6 +216,8 @@ Feature flags keep idle costs at ~$4-10/month:
 - Scopes: db, search, agent, api, terraform, lambda, step-functions, frontend
 - Keep first line under 72 characters, imperative mood
 - Only commit when explicitly asked
+- Always include co-author trailer: `Co-Authored-By: Oz <oz-agent@warp.dev>`
+- Never commit directly to `main` — all changes go through a feature branch and PR
 
 ## Documentation Standards
 

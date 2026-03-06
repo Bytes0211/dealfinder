@@ -92,10 +92,20 @@ async def _get_or_provision_user(
         hashed_password=hashed,
     )
     try:
-        user = await repo.create(new_user)
+        # Use a SAVEPOINT so that an IntegrityError from a concurrent insert
+        # only rolls back the nested transaction, leaving the outer session
+        # healthy for the subsequent get_by_id retry.  Without begin_nested()
+        # the session would be left in an aborted-transaction state after the
+        # IntegrityError, causing the retry query to raise
+        # InFailedSQLTransactionError and bubble up as an unhandled HTTP 500.
+        session = await repo._get_session()
+        async with session.begin_nested():
+            user = await repo.create(new_user)
         logger.info(f"Auto-provisioned Cognito user {user_id} ({email})")
     except IntegrityError:
-        # Concurrent request already created the record — just fetch it.
+        # A concurrent request already created the record.  The SAVEPOINT was
+        # rolled back above so the outer transaction is still valid — fetch the
+        # existing row.
         user = await repo.get_by_id(user_id)
         if not user:
             raise HTTPException(

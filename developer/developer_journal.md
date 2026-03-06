@@ -1457,3 +1457,96 @@ terraform apply  # from infrastructure/environments/dev/
 
 **Session End:** March 6, 2026 01:35 UTC
 **Status:** ✅ Search error resolved, layout fixed, logo fixed — ready to deploy
+
+---
+
+## Session 6: Bug Fix — Watchlist Save HTTP 500 (March 6, 2026)
+
+**Date:** March 6, 2026
+**Time:** ~04:00 - 04:30 UTC
+**Duration:** ~30 minutes
+**Phase:** Phase 6 — Post-launch bug fixes
+**Branch:** `fix/watchlist-save-500-race-condition`
+**Status:** ✅ COMPLETE
+
+### Objective
+
+Diagnose and fix the HTTP 500 error returned when clicking "Save selected to watchlist"
+after login on the Search page.
+
+---
+
+### Root Cause
+
+**Race condition in `_get_or_provision_user`** (`src/dealfinder/api/routes/users.py`)
+
+When a user saves to the watchlist for the first time, two requests fire close together:
+
+1. `GET /api/v1/users/{sub}` — triggered by `useUserPreferences` on SearchPage mount
+2. `PUT /api/v1/users/{sub}/preferences` — triggered when the user clicks Save
+
+Both requests find no existing DB row and both call `repo.create(new_user)`. One succeeds;
+the other receives a PostgreSQL `IntegrityError` (unique constraint on user id/email).
+
+The pre-fix `except IntegrityError` handler immediately called `repo.get_by_id()` again
+**on the same session**, which was now in an aborted-transaction state. asyncpg raises
+`InFailedSQLTransactionError` on any query after a transaction abort. This unhandled
+exception propagated as an HTTP 500.
+
+The race is most likely to trigger when Aurora Serverless v2 is scaling up from its
+minimum capacity (0.5 ACU), making the initial DB connection slower than normal.
+
+---
+
+### Fix
+
+Wrapped `repo.create()` in `async with session.begin_nested()` — a PostgreSQL SAVEPOINT.
+
+When `IntegrityError` occurs inside the savepoint, SQLAlchemy automatically executes
+`ROLLBACK TO SAVEPOINT`, restoring the outer transaction to a healthy state. The
+retry `repo.get_by_id()` then executes successfully on the restored transaction.
+
+**File:** `src/dealfinder/api/routes/users.py` — `_get_or_provision_user`
+
+---
+
+### Tests Added
+
+`tests/unit/api/test_users.py` — new `TestGetOrProvisionUser` class (4 tests):
+
+- `test_returns_existing_user_from_db` — happy path: user already exists
+- `test_provisions_new_user_from_token_claims` — happy path: first-time user
+- `test_recovers_from_concurrent_insert_via_savepoint` — the race condition path
+- `test_raises_404_when_token_has_no_identity` — token with no email claim
+
+Also added `test_saves_feeds_to_watchlist` to `TestUpdateUserPreferences` covering
+the full save-to-watchlist happy path via the endpoint.
+
+**Test results:** 316 passed, 41 skipped (infrastructure tests require live AWS)
+
+---
+
+### Lessons Learned
+
+1. **SQLAlchemy + asyncpg: always use `begin_nested()` for optimistic inserts** —
+   After any exception that touches the DB, the asyncpg session is in an aborted state.
+   A SAVEPOINT isolates the failed statement and restores the outer transaction.
+
+2. **Aurora Serverless v2 cold-start amplifies races** — Even at 0.5 ACU minimum,
+   the first connection on a cold Lambda container adds latency. This is enough for
+   two near-simultaneous requests to both see an empty DB row before either commits.
+
+3. **Test private helpers directly** — Testing `_get_or_provision_user` in isolation
+   was cleaner and more precise than mocking through the full endpoint, which required
+   threading a fake JWT through all the auth dependencies.
+
+---
+
+### GitHub Issue
+
+`github/ISSUES/003-watchlist-save-500-user-provision-race-condition.md`
+
+---
+
+**Session End:** March 6, 2026 04:30 UTC
+**Status:** ✅ Fix implemented, tests passing — ready to deploy API Lambda

@@ -5,9 +5,11 @@ PUT  /users/{id}/preferences     — update preferences (auth required)
 DELETE /users/{id}               — deactivate account (auth required)
 """
 
+import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
+from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 
 
@@ -157,6 +159,130 @@ class TestUpdateUserPreferences:
             headers={"X-Test-User-Id": str(user.id)},
         )
         assert response.status_code == 422
+
+    def test_saves_feeds_to_watchlist(self, client, user) -> None:
+        """Saving saved_feeds should persist them in notification_preferences."""
+        payload = {
+            "saved_feeds": [
+                {
+                    "id": "feed-001",
+                    "query": "sony headphones",
+                    "title": "Sony WH-1000XM5",
+                    "url": "https://example.com/sony",
+                    "current_price": "$249.99",
+                    "min_discount": 20,
+                    "quality_score": 8.5,
+                    "quality_reason": "Strong brand, good discount",
+                    "saved_at": "2026-03-06T04:00:00Z",
+                }
+            ]
+        }
+        response = client.put(
+            f"/api/v1/users/{user.id}/preferences",
+            json=payload,
+            headers={"X-Test-User-Id": str(user.id)},
+        )
+        assert response.status_code == 200
+        body = response.json()
+        feeds = body["notification_preferences"]["saved_feeds"]
+        assert len(feeds) == 1
+        assert feeds[0]["title"] == "Sony WH-1000XM5"
+        assert feeds[0]["min_discount"] == 20
+
+
+
+class TestGetOrProvisionUser:
+    """Unit tests for the _get_or_provision_user helper.
+
+    Tests auto-provisioning logic in isolation, including the SAVEPOINT-based
+    race-condition fix that prevents HTTP 500 when two concurrent requests
+    attempt to create the same Cognito user simultaneously.
+    """
+
+    async def test_returns_existing_user_from_db(self) -> None:
+        """If the user already exists, return it without calling create."""
+        from dealfinder.api.routes.users import _get_or_provision_user
+
+        user_id = uuid4()
+        existing = MagicMock()
+        mock_repo = MagicMock()
+        mock_repo.get_by_id = AsyncMock(return_value=existing)
+
+        result = await _get_or_provision_user(user_id, {}, mock_repo)
+
+        assert result is existing
+        mock_repo.create.assert_not_called()
+
+    async def test_provisions_new_user_from_token_claims(self) -> None:
+        """If no DB record exists, auto-provision a new user from the token email."""
+        from dealfinder.api.routes.users import _get_or_provision_user
+
+        user_id = uuid4()
+        new_user = MagicMock()
+
+        mock_cm = AsyncMock()
+        mock_cm.__aexit__ = AsyncMock(return_value=False)
+        mock_session = MagicMock()
+        mock_session.begin_nested = MagicMock(return_value=mock_cm)
+
+        mock_repo = MagicMock()
+        mock_repo.get_by_id = AsyncMock(return_value=None)
+        mock_repo._get_session = AsyncMock(return_value=mock_session)
+        mock_repo.create = AsyncMock(return_value=new_user)
+
+        result = await _get_or_provision_user(
+            user_id, {"username": "new@example.com"}, mock_repo
+        )
+
+        assert result is new_user
+        mock_repo.create.assert_called_once()
+
+    async def test_recovers_from_concurrent_insert_via_savepoint(self) -> None:
+        """IntegrityError from a concurrent INSERT is handled without leaving the
+        session in a failed transaction state.
+
+        Pre-fix behaviour: repo.get_by_id() after IntegrityError would raise
+        InFailedSQLTransactionError because the transaction was aborted.
+        Post-fix behaviour: begin_nested() rolls back only the SAVEPOINT;
+        the outer transaction remains valid so the retry get_by_id succeeds.
+        """
+        from dealfinder.api.routes.users import _get_or_provision_user
+
+        user_id = uuid4()
+        existing = MagicMock()
+
+        # __aexit__ returns False so IntegrityError is not suppressed and
+        # propagates to our except IntegrityError block.
+        mock_cm = AsyncMock()
+        mock_cm.__aexit__ = AsyncMock(return_value=False)
+        mock_session = MagicMock()
+        mock_session.begin_nested = MagicMock(return_value=mock_cm)
+
+        mock_repo = MagicMock()
+        mock_repo.get_by_id = AsyncMock(side_effect=[None, existing])
+        mock_repo._get_session = AsyncMock(return_value=mock_session)
+        mock_repo.create = AsyncMock(
+            side_effect=IntegrityError("INSERT", {}, Exception("unique_violation"))
+        )
+
+        result = await _get_or_provision_user(
+            user_id, {"username": "race@example.com"}, mock_repo
+        )
+
+        assert result is existing
+        assert mock_repo.get_by_id.call_count == 2
+
+    async def test_raises_404_when_token_has_no_identity(self) -> None:
+        """Token with no email/username/cognito:username claim raises HTTP 404."""
+        from dealfinder.api.routes.users import _get_or_provision_user
+
+        user_id = uuid4()
+        mock_repo = MagicMock()
+        mock_repo.get_by_id = AsyncMock(return_value=None)
+
+        with pytest.raises(HTTPException) as exc_info:
+            await _get_or_provision_user(user_id, {}, mock_repo)
+        assert exc_info.value.status_code == 404
 
 
 class TestDeleteUser:
