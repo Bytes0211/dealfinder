@@ -6,21 +6,25 @@ This file provides guidance to AI assistants (Claude Code, Warp, etc.) when work
 
 Deal Finder is an AI-powered deal hunting system that discovers deals via RSS feeds, estimates prices using AWS Bedrock (Claude), and sends notifications for high-value opportunities. It's a serverless system on AWS, built by a solo developer.
 
-**Status:** Phase 4 of 5 complete. Infrastructure, data layer, core pipeline, notifications, and REST API are built. Next: production deploy (Phase 5). React frontend added as Phase 6 (planned).
+**Status:** Phase 6 complete. Infrastructure, data layer, core pipeline, notifications, REST API, and React frontend are all live in production. Frontend deployed to CloudFront; API Lambda running FastAPI + Mangum. Tavily-powered free-text search with Bedrock enrichment is live.
 
 ## Architecture
 
 ```
-RSS Feeds → Lambda (Scanner) → Step Functions → Lambda (Evaluator) → SNS → Pushover/Email
+RSS Feeds → Lambda (Scanner) → Step Functions → Lambda (Evaluator) → SNS → SMS/Email
                                                       ↕
                                                 Aurora + OpenSearch
                                                       ↕
                                                 Bedrock (Claude)
+
+Tavily → Lambda (API /search) → Bedrock (BedrockSearchExtractor) → SearchResponse
+
+React SPA (CloudFront) → API Gateway → Lambda (FastAPI/Mangum) → Aurora
 ```
 
-**Stack:** Python 3.12, FastAPI, SQLAlchemy (async), Lambda, Step Functions, SQS/SNS, Aurora PostgreSQL, OpenSearch, Bedrock, Terraform, GitHub Actions
+**Stack:** Python 3.12, FastAPI, SQLAlchemy (async), Lambda, Step Functions, SQS/SNS, Aurora PostgreSQL, OpenSearch, Bedrock, Tavily, Terraform, GitHub Actions, React 19 + Vite + TypeScript, Cognito Hosted UI
 
-**Not in scope:** Kafka/MSK, Spark/EMR, ECS Fargate, SageMaker, Apache APISIX, Prometheus/Grafana, ElastiCache. See PRODUCTION_PLAN.md "Future Enhancements" for triggers to re-add. **Phase 6 (planned):** React + Vite + TypeScript frontend (S3/CloudFront static site).
+**Not in scope:** Kafka/MSK, Spark/EMR, ECS Fargate, SageMaker, Apache APISIX, Prometheus/Grafana, ElastiCache. See PRODUCTION_PLAN.md "Future Enhancements" for triggers to re-add.
 
 ### Agent Architecture
 - **ScannerAgent**: Scrapes RSS feeds for deals (Lambda)
@@ -44,21 +48,22 @@ EventBridge (schedule) → Scanner → Evaluate → Decide (discount > threshold
 src/dealfinder/
 ├── agents/
 │   ├── config.py           # AgentConfig (pydantic-settings, env_prefix=DEALFINDER_)
-│   ├── bedrock.py          # BedrockPriceEstimator, PriceEstimationResult
+│   ├── bedrock.py          # BedrockPriceEstimator, BedrockSearchExtractor
 │   ├── scanner.py          # ScannerAgent + Lambda handler
 │   ├── evaluator.py        # EvaluatorAgent + Lambda handler
-│   └── messenger.py        # MessengerAgent + Lambda handler (Phase 4)
-├── notifications/          # Notification dispatch clients (Phase 4)
-│   ├── pushover.py         # PushoverClient — send() via httpx
+│   └── messenger.py        # MessengerAgent + Lambda handler
+├── notifications/          # Notification dispatch clients
+│   ├── sns.py              # SnsClient — SMS via boto3 SNS
 │   └── ses.py              # SesClient — send_email() via boto3 sesv2
-├── api/                    # FastAPI REST API + Mangum (Phase 4)
+├── api/                    # FastAPI REST API + Mangum
 │   ├── main.py             # FastAPI app (lifespan) + Mangum handler
 │   ├── schemas.py          # Pydantic request/response models
 │   ├── deps.py             # get_db(), get_current_user_id() dependencies
 │   └── routes/
 │       ├── health.py       # GET /api/v1/health
 │       ├── deals.py        # GET /deals, /deals/top, /deals/{id}
-│       └── users.py        # POST /users, PUT /users/{id}/preferences
+│       ├── users.py        # POST /users, PUT /users/{id}/preferences, DELETE /users/{id}, GET /users/{id}/watchlist/matches
+│       └── search.py       # POST /search — Tavily + Bedrock enrichment
 ├── db/
 │   ├── models.py           # SQLAlchemy ORM models (5 models, 3 enums)
 │   ├── connection.py       # Async engine, session factory, context manager
@@ -94,16 +99,24 @@ docs/
 └── USER_GUIDE.md           # End-user API guide
 infrastructure/
 ├── environments/
-│   ├── dev/                # Terraform dev environment
-│   └── prod/               # Terraform prod environment (Phase 5)
+│   └── dev/                # Terraform environment (targets prod AWS resources)
 └── modules/
     ├── networking/         # VPC, subnets, VPC endpoints
     ├── data/               # S3, DynamoDB, Aurora, OpenSearch
     ├── monitoring/         # CloudWatch logs, alarms, dashboard
     ├── pipeline/           # SQS, Lambda, Step Functions, EventBridge, IAM
-    ├── notifications/      # SNS topic, Messenger Lambda, SQS ESM (Phase 4)
-    ├── api/                # API Lambda, API GW HTTP API, Cognito (Phase 4)
-    └── frontend/           # S3 + CloudFront static site (Phase 6)
+    ├── notifications/      # SNS topic, Messenger Lambda, SQS ESM
+    ├── api/                # API Lambda, API GW HTTP API v2, Cognito
+    └── frontend/           # S3 + CloudFront static site, OAC
+frontend/
+├── src/
+│   ├── api/                # axios client, typed API wrappers (deals, users, search)
+│   ├── auth/               # Cognito Hosted UI auth helpers + JWT decode
+│   ├── components/         # NavBar, DealCard, Pagination, ProtectedRoute, InfoTooltip
+│   ├── hooks/              # TanStack Query hooks (useSearch, useDeals, useWatchlistMatches, …)
+│   └── pages/              # FeedPage, SearchPage, TopDealsPage, PreferencesPage, …
+├── public/                 # Static assets
+└── dist/                   # Vite build output (deployed to S3/CloudFront)
 ```
 
 ## Code Conventions
@@ -244,14 +257,15 @@ Feature flags keep idle costs at ~$4-10/month:
 | `developer/project-status.md` | Progress tracking and timeline |
 | `src/dealfinder/agents/scanner.py` | ScannerAgent Lambda (RSS → Aurora) |
 | `src/dealfinder/agents/evaluator.py` | EvaluatorAgent Lambda (Bedrock → discount) |
-| `src/dealfinder/agents/messenger.py` | MessengerAgent Lambda (SQS → Pushover/SES) |
-| `src/dealfinder/agents/bedrock.py` | BedrockPriceEstimator + PriceEstimationResult |
-| `src/dealfinder/agents/config.py` | AgentConfig pydantic-settings |
-| `src/dealfinder/notifications/pushover.py` | PushoverClient (httpx) |
+| `src/dealfinder/agents/messenger.py` | MessengerAgent Lambda (SQS → SNS/SES) |
+| `src/dealfinder/agents/bedrock.py` | BedrockPriceEstimator, BedrockSearchExtractor |
+| `src/dealfinder/agents/config.py` | AgentConfig pydantic-settings (incl. tavily_api_key) |
+| `src/dealfinder/notifications/sns.py` | SnsClient (boto3 SNS SMS) |
 | `src/dealfinder/notifications/ses.py` | SesClient (boto3 sesv2) |
 | `src/dealfinder/api/main.py` | FastAPI app + Mangum Lambda handler |
 | `src/dealfinder/api/routes/deals.py` | Deal endpoints (list, top, detail) |
-| `src/dealfinder/api/routes/users.py` | User endpoints (create, preferences) |
+| `src/dealfinder/api/routes/search.py` | POST /search — Tavily + Bedrock enrichment |
+| `src/dealfinder/api/routes/users.py` | User CRUD, preferences, watchlist matches, delete |
 | `src/dealfinder/db/models.py` | All 5 ORM models |
 | `src/dealfinder/data/repository.py` | All 5 repository classes + BaseRepository |
 | `src/dealfinder/db/connection.py` | Async DB engine and session management |
@@ -267,7 +281,7 @@ Feature flags keep idle costs at ~$4-10/month:
 
 ## What NOT to Do
 
-- Don't add Kafka, Spark, ECS, or SageMaker — these were intentionally removed from scope. (React frontend is Phase 6 — planned, not yet built.)
+- Don't add Kafka, Spark, ECS, or SageMaker — these were intentionally removed from scope.
 - Don't use synchronous database calls — everything is async.
 - Don't call blocking I/O (boto3, feedparser, requests) directly inside `async def` — wrap in `asyncio.get_running_loop().run_in_executor(None, ...)` to keep the event loop responsive.
 - Don't bypass the repository layer with raw SQL or direct session queries in business logic.

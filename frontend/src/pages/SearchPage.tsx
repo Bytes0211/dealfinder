@@ -149,64 +149,75 @@ export function SearchPage() {
         <>
           <p className="result-count">{results.length} results for "{searchData?.query}"</p>
 
-          <div className="search-results">
-            {results.map((result, i) => {
-              const state = resultStates[i] ?? { selected: false, minDiscount: 20 };
-              const isSaved = savedIndexes.has(i);
-              return (
-                <div
-                  key={i}
-                  className={`search-result-card${state.selected ? ' search-result-card--selected' : ''}${isSaved ? ' search-result-card--saved' : ''}`}
-                >
-                  <label className="search-result-check">
-                    <input
-                      type="checkbox"
-                      checked={state.selected}
-                      disabled={isSaved}
-                      onChange={() => toggleSelect(i)}
-                    />
-                  </label>
+          <table className="search-table">
+            <thead>
+              <tr>
+                <th></th>
+                <th>Feed</th>
+                <th>Description</th>
+                <th>Quality Score</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {results.map((result, i) => {
+                const state = resultStates[i] ?? { selected: false, minDiscount: 20 };
+                const isSaved = savedIndexes.has(i);
+                return (
+                  <tr
+                    key={i}
+                    className={`search-row${state.selected ? ' search-row--selected' : ''}${isSaved ? ' search-row--saved' : ''}`}
+                  >
+                    <td className="search-row-check">
+                      <input
+                        type="checkbox"
+                        checked={state.selected}
+                        disabled={isSaved}
+                        onChange={() => toggleSelect(i)}
+                      />
+                    </td>
 
-                  <div className="search-result-body">
-                    <a
-                      href={result.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="search-result-title"
-                    >
-                      {result.title}
-                    </a>
-                    <div className="search-result-meta">
+                    <td className="search-row-feed">
+                      <a href={result.url} target="_blank" rel="noopener noreferrer">
+                        {result.title}
+                      </a>
+                    </td>
+
+                    <td className="search-row-desc">
                       {result.current_price && (
                         <span className="search-result-price">{result.current_price}</span>
                       )}
-                      <QualityBadge score={result.quality_score} />
                       {result.quality_reason && (
                         <span className="search-result-reason">{result.quality_reason}</span>
                       )}
-                    </div>
-                  </div>
+                    </td>
 
-                  {state.selected && !isSaved && (
-                    <label className="search-result-discount">
-                      <span>Min&nbsp;discount&nbsp;%</span>
-                      <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        step={1}
-                        value={state.minDiscount}
-                        onChange={(e) => setMinDiscount(i, Number(e.target.value))}
-                        className="form-input form-input--sm"
-                      />
-                    </label>
-                  )}
+                    <td className="search-row-quality">
+                      <QualityBadge score={result.quality_score} />
+                    </td>
 
-                  {isSaved && <span className="badge badge--ok">Saved ✔</span>}
-                </div>
-              );
-            })}
-          </div>
+                    <td className="search-row-actions">
+                      {state.selected && !isSaved && (
+                        <label className="search-result-discount">
+                          <span>Min&nbsp;%</span>
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            step={1}
+                            value={state.minDiscount}
+                            onChange={(e) => setMinDiscount(i, Number(e.target.value))}
+                            className="form-input form-input--sm"
+                          />
+                        </label>
+                      )}
+                      {isSaved && <span className="badge badge--ok">Saved ✔</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
 
           <div className="search-actions">
             {authed && (
