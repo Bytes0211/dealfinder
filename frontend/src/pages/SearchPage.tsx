@@ -113,7 +113,13 @@ export function SearchPage() {
           setSavedIndexes((prev) => new Set([...prev, ...selected.map(({ i }) => i)]));
           setSaveMsg(`${newFeeds.length} feed${newFeeds.length !== 1 ? 's' : ''} saved ✔`);
         },
-        onError: () => setSaveMsg('Failed to save. Are you logged in?'),
+        onError: (err) => {
+          const detail =
+            isAxiosError(err) && err.response?.data?.detail
+              ? String(err.response.data.detail)
+              : 'An unexpected error occurred.';
+          setSaveMsg(`Failed to save: ${detail}`);
+        },
       },
     );
   }

@@ -9,7 +9,11 @@ const USER_ID_KEY = 'dealfinder_user_id';
  */
 function decodeJwtPayload(token: string): Record<string, unknown> {
   try {
-    const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    let base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    // Pad to a multiple of 4 characters so atob() always succeeds
+    while (base64.length % 4) {
+      base64 += '=';
+    }
     return JSON.parse(atob(base64));
   } catch {
     return {};

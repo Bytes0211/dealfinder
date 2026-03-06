@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { isAxiosError } from 'axios';
 import { getUserId, logout } from '../auth';
 import { useUpdatePreferences, useUserPreferences, useDeleteUser } from '../hooks';
 
@@ -12,7 +13,7 @@ export function PreferencesPage() {
   const navigate = useNavigate();
   const userId = getUserId() ?? '';
   const { data: existing } = useUserPreferences(userId);
-  const { mutate, isPending, isSuccess, isError } = useUpdatePreferences(userId);
+  const { mutate, isPending, isSuccess, isError, error: prefsError } = useUpdatePreferences(userId);
   const { mutate: doDelete, isPending: isDeleting } = useDeleteUser(userId);
 
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -80,7 +81,10 @@ export function PreferencesPage() {
           {isSuccess && <p className="form-feedback form-feedback--ok">✓ Preferences saved.</p>}
           {isError && (
             <p className="form-feedback form-feedback--error">
-              Failed to save. Are you logged in?
+              Failed to save:{' '}
+              {isAxiosError(prefsError) && prefsError.response?.data?.detail
+                ? String(prefsError.response.data.detail)
+                : 'An unexpected error occurred.'}
             </p>
           )}
         </form>
