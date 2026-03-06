@@ -130,7 +130,7 @@ export function SearchPage() {
       </form>
 
       {searchError && (
-        <p className="state-msg state-msg--error">Search failed. Is the API running?</p>
+        <p className="state-msg state-msg--error">Search failed. Error X001.</p>
       )}
 
       {results.length > 0 && (
