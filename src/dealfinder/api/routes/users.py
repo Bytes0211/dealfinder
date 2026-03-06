@@ -361,21 +361,24 @@ async def watchlist_matches(
 
     min_discount_overall = min(min_discounts) if min_discounts else 0
 
+    # When min_discount is 0 include deals with NULL discount_percentage (not yet
+    # evaluated by Bedrock). NULL >= 0 is NULL (falsy) in SQL, which would silently
+    # drop unevaluated deals even though the user wants any match.
+    discount_filter = (
+        or_(Deal.discount_percentage.is_(None), Deal.discount_percentage >= min_discount_overall)
+        if min_discount_overall == 0
+        else Deal.discount_percentage >= min_discount_overall
+    )
+
     base_query = (
         select(Deal)
         .options(selectinload(Deal.source))
-        .where(
-            or_(*ilike_conditions),
-            Deal.discount_percentage >= min_discount_overall,
-        )
+        .where(or_(*ilike_conditions), discount_filter)
     )
     count_query = (
         select(func.count())
         .select_from(Deal)
-        .where(
-            or_(*ilike_conditions),
-            Deal.discount_percentage >= min_discount_overall,
-        )
+        .where(or_(*ilike_conditions), discount_filter)
     )
 
     total_result = await db.execute(count_query)
