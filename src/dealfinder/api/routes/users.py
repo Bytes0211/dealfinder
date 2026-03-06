@@ -34,7 +34,7 @@ from dealfinder.api.schemas import (  # noqa: F401
     UserResponse,
 )
 from dealfinder.data.repository import UserRepository
-from dealfinder.db.models import Deal, DealStatus, User
+from dealfinder.db.models import Deal, DealSource, DealStatus, User
 
 logger = logging.getLogger(__name__)
 
@@ -386,6 +386,15 @@ async def watchlist_matches(
     )
     deals = result.scalars().all()
 
+    # Fetch pipeline scan status from active deal sources
+    scan_result = await db.execute(
+        select(func.max(DealSource.last_checked_at), func.count(DealSource.id))
+        .where(DealSource.is_active == True)  # noqa: E712
+    )
+    scan_row = scan_result.one()
+    last_scan_at: str | None = scan_row[0].isoformat() if scan_row[0] else None
+    sources_scanned: int = scan_row[1]
+
     items = [
         DealResponse(
             id=deal.id,
@@ -402,7 +411,14 @@ async def watchlist_matches(
         )
         for deal in deals
     ]
-    return DealListResponse(items=items, total=total, limit=limit, offset=offset)
+    return DealListResponse(
+        items=items,
+        total=total,
+        limit=limit,
+        offset=offset,
+        last_scan_at=last_scan_at,
+        sources_scanned=sources_scanned,
+    )
 
 
 def _subscribe_phone_to_sns(phone_number: str) -> None:

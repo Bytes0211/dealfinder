@@ -10,6 +10,7 @@ Color palette: `#1B2845`, `#274060`, `#335C81`, `#65AFFF`
 ## 1. High-Level System Architecture
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'fontSize': '14px', 'primaryColor': '#1B2845', 'primaryTextColor': '#ffffff', 'secondaryColor': '#274060', 'secondaryTextColor': '#ffffff', 'tertiaryColor': '#335C81', 'tertiaryTextColor': '#ffffff', 'lineColor': '#65AFFF', 'textColor': '#ffffff', 'clusterBkg': '#1B2845', 'clusterTitleColor': '#ffffff'}}}%%
 flowchart TD
     classDef primary fill:#1B2845,stroke:#1B2845,color:#ffffff
     classDef secondary fill:#274060,stroke:#274060,color:#ffffff
@@ -77,6 +78,7 @@ flowchart TD
 ## 2. Core Pipeline (Step Functions Workflow)
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'fontSize': '14px', 'primaryColor': '#1B2845', 'primaryTextColor': '#ffffff', 'secondaryColor': '#274060', 'secondaryTextColor': '#ffffff', 'tertiaryColor': '#335C81', 'tertiaryTextColor': '#ffffff', 'lineColor': '#65AFFF', 'textColor': '#ffffff', 'clusterBkg': '#1B2845', 'clusterTitleColor': '#ffffff'}}}%%
 flowchart TD
     classDef primary fill:#1B2845,stroke:#1B2845,color:#ffffff
     classDef secondary fill:#274060,stroke:#274060,color:#ffffff
@@ -115,6 +117,7 @@ flowchart TD
 ## 3. Data Flow & Persistence
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'fontSize': '14px', 'primaryColor': '#1B2845', 'primaryTextColor': '#ffffff', 'secondaryColor': '#274060', 'secondaryTextColor': '#ffffff', 'tertiaryColor': '#335C81', 'tertiaryTextColor': '#ffffff', 'lineColor': '#65AFFF', 'textColor': '#ffffff', 'clusterBkg': '#1B2845', 'clusterTitleColor': '#ffffff'}}}%%
 flowchart LR
     classDef primary fill:#1B2845,stroke:#1B2845,color:#ffffff
     classDef secondary fill:#274060,stroke:#274060,color:#ffffff
@@ -147,6 +150,7 @@ flowchart LR
 ## 4. User API Request Flow (Phase 4 Preview)
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'fontSize': '14px', 'primaryColor': '#1B2845', 'primaryTextColor': '#ffffff', 'secondaryColor': '#274060', 'secondaryTextColor': '#ffffff', 'tertiaryColor': '#335C81', 'tertiaryTextColor': '#ffffff', 'lineColor': '#65AFFF', 'textColor': '#ffffff', 'actorTextColor': '#ffffff', 'actorLineColor': '#65AFFF', 'sequenceNumberColor': '#ffffff'}}}%%
 sequenceDiagram
     autonumber
     participant User as User / Client

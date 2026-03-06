@@ -56,12 +56,16 @@ class DealListResponse(BaseModel):
         total: Total number of matching deals.
         limit: Page size used.
         offset: Offset used.
+        last_scan_at: ISO timestamp of the most recent pipeline scan (None if never run).
+        sources_scanned: Number of active RSS feed sources in the last scan.
     """
 
     items: list[DealResponse]
     total: int
     limit: int
     offset: int
+    last_scan_at: Optional[str] = None
+    sources_scanned: Optional[int] = None
 
 
 # ─────────────────────────────────────────────

@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 # asyncio and is unaffected by this setting.
 _FEED_SOCKET_TIMEOUT_SECONDS = 30
 socket.setdefaulttimeout(_FEED_SOCKET_TIMEOUT_SECONDS)
+_LAMBDA_LOOP: asyncio.AbstractEventLoop | None = None
 
 
 class ScannerAgent:
@@ -183,4 +184,10 @@ def handler(event: dict, context: Any) -> dict:
     Returns:
         Scan result dictionary with new_deal_ids and statistics.
     """
-    return asyncio.run(ScannerAgent().run())
+    global _LAMBDA_LOOP
+
+    if _LAMBDA_LOOP is None or _LAMBDA_LOOP.is_closed():
+        _LAMBDA_LOOP = asyncio.new_event_loop()
+        asyncio.set_event_loop(_LAMBDA_LOOP)
+
+    return _LAMBDA_LOOP.run_until_complete(ScannerAgent().run())

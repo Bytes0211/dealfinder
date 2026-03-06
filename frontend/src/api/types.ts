@@ -19,6 +19,10 @@ export interface DealListResponse {
   total: number;
   limit: number;
   offset: number;
+  /** ISO timestamp of the most recent pipeline scan, or null if never run. */
+  last_scan_at: string | null;
+  /** Number of active RSS feed sources checked in the last scan. */
+  sources_scanned: number | null;
 }
 
 /** A single entry in the user's watchlist (saved search turned into a feed). */

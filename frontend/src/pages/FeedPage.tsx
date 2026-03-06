@@ -175,7 +175,20 @@ export function FeedPage() {
           {matchData && (
             <>
               {matchData.items.length === 0 ? (
-                <p className="state-msg">No matched deals yet. Check back after the next pipeline run.</p>
+                <div className="state-msg">
+                  <p>No matched deals yet.</p>
+                  {matchData.last_scan_at ? (
+                    <p className="state-msg--detail">
+                      Last pipeline run:{' '}
+                      <strong>{new Date(matchData.last_scan_at).toLocaleString()}</strong>
+                      {matchData.sources_scanned != null && matchData.sources_scanned > 0 && (
+                        <> &mdash; {matchData.sources_scanned} source{matchData.sources_scanned !== 1 ? 's' : ''} scanned</>
+                      )}
+                    </p>
+                  ) : (
+                    <p className="state-msg--detail">Check back after the next pipeline run.</p>
+                  )}
+                </div>
               ) : (
                 <>
                   <p className="result-count">{matchData.total} matched deals</p>

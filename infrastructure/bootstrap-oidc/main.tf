@@ -107,6 +107,21 @@ data "aws_iam_policy_document" "deploy" {
     ]
     resources = ["*"]
   }
+
+  statement {
+    sid    = "LambdaBackendDeploy"
+    effect = "Allow"
+    actions = [
+      "lambda:UpdateFunctionCode",
+      "lambda:UpdateFunctionConfiguration",
+      "lambda:GetFunction",
+      "lambda:GetFunctionConfiguration",
+      "lambda:InvokeFunction",
+    ]
+    resources = [
+      "arn:aws:lambda:us-east-1:${data.aws_caller_identity.current.account_id}:function:dealfinder-*",
+    ]
+  }
 }
 
 resource "aws_iam_role_policy" "deploy" {
