@@ -169,14 +169,14 @@ module "pipeline" {
   enable_schedule     = var.enable_pipeline_schedule
   schedule_expression = var.pipeline_schedule_expression
 
-  db_secret_arn = var.db_secret_arn
+  db_secret_arn = try(module.aurora[0].secret_arn, "")
   db_host       = try(module.aurora[0].cluster_endpoint, "")
   db_name       = var.aurora_database_name
 
   tags = local.common_tags
 }
 
-# ── Notifications ───────────────────────────────────────────────────────────
+# ── Notifications
 
 module "notifications" {
   source = "../../modules/notifications"
@@ -196,7 +196,7 @@ module "notifications" {
   create_cloudwatch_alarms = true
 
   bedrock_model_id    = var.messenger_bedrock_model_id
-  db_secret_arn       = var.db_secret_arn
+  db_secret_arn       = try(module.aurora[0].secret_arn, "")
   db_host             = try(module.aurora[0].cluster_endpoint, "")
   db_name             = var.aurora_database_name
   ses_sender_email    = var.ses_sender_email
@@ -222,7 +222,7 @@ module "api" {
   alarm_sns_topic_arn      = module.cloudwatch.alarms_topic_arn
   create_cloudwatch_alarms = true
 
-  db_secret_arn  = var.db_secret_arn
+  db_secret_arn  = try(module.aurora[0].secret_arn, "")
   db_host        = try(module.aurora[0].cluster_endpoint, "")
   db_name        = var.aurora_database_name
   tavily_api_key = var.tavily_api_key

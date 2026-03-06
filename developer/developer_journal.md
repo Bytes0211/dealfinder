@@ -1550,3 +1550,101 @@ the full save-to-watchlist happy path via the endpoint.
 
 **Session End:** March 6, 2026 04:30 UTC
 **Status:** ✅ Fix implemented, tests passing — ready to deploy API Lambda
+
+---
+
+## Session 7: Bug Fix — All Lambdas Missing DB_SECRET_ARN (March 6, 2026)
+
+**Date:** March 6, 2026
+**Time:** ~05:00 - 05:30 UTC
+**Duration:** ~30 minutes
+**Phase:** Phase 6 — Post-launch infrastructure fix
+**Branch:** `dev`
+**Status:** ✅ COMPLETE
+
+### Objective
+
+Diagnose and fix HTTP 500 errors on any database-touching endpoint after login.
+Symptom reported: "Save selected to watchlist" returning "Failed to save: HTTP 500: Internal Server Error".
+
+---
+
+### Root Cause
+
+`asyncpg.exceptions.InvalidPasswordError: password authentication failed for user "dealfinder_admin"`
+
+All four Lambda functions (`api`, `scanner`, `evaluator`, `messenger`) had `DB_SECRET_ARN=""`
+in their environment variables. `_resolve_db_config()` in `src/dealfinder/db/connection.py`
+skips Secrets Manager when `DB_SECRET_ARN` is empty and falls back to `DB_PASSWORD`, which
+is also unset — resulting in a blank password on every Aurora connection attempt.
+
+**Why it was empty:** The `db_secret_arn` Terraform variable in
+`infrastructure/environments/dev/variables.tf` defaulted to `""`. It was never supplied
+via `terraform.tfvars` or `TF_VAR_db_secret_arn`. The Secrets Manager secret
+(`dealfinder/prod/aurora`) existed in AWS but was not owned by Terraform, so no module
+was wiring its ARN into the Lambda environment. This affected every Lambda that reads
+from Aurora — the entire pipeline and API were non-functional against the live database.
+
+---
+
+### Actions Taken
+
+#### 1. Diagnosis (10 minutes)
+
+- Confirmed Lambda code was real FastAPI (~40 MB, handler: `dealfinder.api.main.handler`)
+- Pulled CloudWatch logs: `InvalidPasswordError` on every DB-touching request
+- Inspected all 4 Lambda environment variables: `DB_SECRET_ARN=""` universally
+- Confirmed secret existed in Secrets Manager: `dealfinder/prod/aurora`
+- Confirmed Lambda IAM roles already had `secretsmanager:GetSecretValue` on `dealfinder/prod/*`
+
+#### 2. Terraform Fix (15 minutes)
+
+**`infrastructure/modules/data/aurora/main.tf`** — Added:
+- `aws_secretsmanager_secret.aurora` (naming: `{project}/{env}/aurora`)
+- `aws_secretsmanager_secret_version.aurora` seeded from `var.master_password`
+  with `ignore_changes = [secret_string]` to protect rotated credentials
+
+**`infrastructure/modules/data/aurora/outputs.tf`** — Added `secret_arn` output.
+
+**`infrastructure/environments/dev/main.tf`** — Replaced `db_secret_arn = var.db_secret_arn`
+in all 3 consumer modules with `db_secret_arn = try(module.aurora[0].secret_arn, "")`.
+
+**`infrastructure/environments/dev/variables.tf`** — Removed manual `db_secret_arn` variable.
+
+#### 3. State Import & Apply (5 minutes)
+
+Imported the existing secret so Terraform takes ownership without recreating it,
+then applied targeting the 4 affected modules. Result: 1 added, 5 changed, 0 destroyed.
+
+---
+
+### Verification
+
+All four Lambdas confirmed with correct `DB_SECRET_ARN` set post-apply.
+
+---
+
+### Lessons Learned
+
+1. **Secrets Manager secrets must be owned by the Terraform module that creates the cluster** —
+   manually created secrets are invisible to Terraform and will never be auto-wired.
+
+2. **`ignore_changes = [secret_string]` is essential for credential secrets** —
+   without it, `terraform apply` after credential rotation resets the password.
+
+3. **`try(module.x[0].output, "")` is the correct pattern for optional modules** —
+   gracefully degrades to `""` when Aurora is disabled via feature flag.
+
+4. **Default `""` for required infrastructure variables is a silent trap** —
+   sensitive wiring variables should have no default so misconfiguration surfaces at plan time.
+
+---
+
+### GitHub Issue
+
+`github/ISSUES/004-all-lambdas-missing-db-secret-arn.md`
+
+---
+
+**Session End:** March 6, 2026 05:30 UTC
+**Status:** ✅ All Lambda functions can now connect to Aurora — watchlist save and all DB-dependent endpoints restored

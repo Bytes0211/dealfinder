@@ -156,12 +156,6 @@ variable "opensearch_create_service_linked_role" {
 
 # ── Pipeline ─────────────────────────────────────────────────────────────────
 
-variable "db_secret_arn" {
-  description = "ARN of Secrets Manager secret with Aurora DB credentials"
-  type        = string
-  default     = ""
-}
-
 variable "enable_pipeline_schedule" {
   description = "Enable EventBridge schedule to run the pipeline automatically"
   type        = bool
