@@ -6,7 +6,10 @@ This file provides guidance to AI assistants (Claude Code, Warp, etc.) when work
 
 Deal Finder is an AI-powered deal hunting system that discovers deals via RSS feeds, estimates prices using AWS Bedrock (Claude), and sends notifications for high-value opportunities. It's a serverless system on AWS, built by a solo developer.
 
-**Status:** Phase 6 live in production. Post-launch stabilisation complete (Sessions 5–8). Frontend on CloudFront, API Lambda running FastAPI + Mangum, Tavily search with Bedrock enrichment live, Aurora schema fully migrated. Per-feed no-deals notifications live (feature02). Feed page now surfaces last pipeline scan time and source count in the watchlist empty-state via `DealListResponse.last_scan_at` and `sources_scanned` (feature03).
+**Status:** Phase 7 complete and live in production. WatchlistAgent Lambda runs on a 30-minute EventBridge schedule, proactively discovering deals via Tavily search + Bedrock (Claude 3 Haiku) enrichment. SQLEnum casing bug and Bedrock Legacy model bug fixed (Session 12). Bedrock IAM policies updated to support cross-region inference profiles.
+
+**Current Bedrock model:** `anthropic.claude-3-haiku-20240307-v1:0` (on-demand, agreement accepted)
+**Upgrade path:** Accept Claude 3.5 Haiku agreement in Bedrock console → switch to `us.anthropic.claude-3-5-haiku-20241022-v1:0`
 
 ## Architecture
 
@@ -31,6 +34,7 @@ React SPA (CloudFront) → API Gateway → Lambda (FastAPI/Mangum) → Aurora
 - **EvaluatorAgent**: Estimates prices via Bedrock, calculates discounts (Lambda); returns `matched_feed_pairs` list of all `{user_id, feed_id, feed_name}` pairs that matched this deal
 - **PipelineSummaryAgent**: After ProcessDeals Map, aggregates `matched_feed_pairs` from all deals, finds unmatched (user, feed) pairs, enqueues `no_deals_feed` SQS messages with 24h per-pair dedup (Lambda)
 - **MessengerAgent**: Generates personalized notifications using Claude, dispatches via SNS (Lambda); handles `no_deals_feed` event_type with `notify_no_deals_feed` (SES only, per-user)
+- **WatchlistAgent**: Scheduled (30-min EventBridge) proactive deal discovery — reads all users' saved watchlist queries, calls Tavily search + `BedrockSearchExtractor(include_trends=True)`, persists `Deal` rows with `status=EVALUATED` and 8 trend fields in `raw_data` JSONB (Lambda)
 
 ### Orchestration Pattern
 AWS Step Functions coordinates the pipeline:
@@ -53,7 +57,8 @@ src/dealfinder/
 │   ├── scanner.py          # ScannerAgent + Lambda handler
 │   ├── evaluator.py        # EvaluatorAgent + Lambda handler; returns matched_feed_pairs
 │   ├── pipeline_summary.py # PipelineSummaryAgent + Lambda handler (per-feed no-deals)
-│   └── messenger.py        # MessengerAgent + Lambda handler; notify_no_deals_feed
+│   ├── messenger.py        # MessengerAgent + Lambda handler; notify_no_deals_feed
+│   └── watchlist.py        # WatchlistAgent + Lambda handler (Tavily + Bedrock trend discovery)
 ├── notifications/          # Notification dispatch clients
 │   ├── sns.py              # SnsClient — SMS via boto3 SNS
 │   └── ses.py              # SesClient — send_email() via boto3 sesv2
@@ -84,7 +89,8 @@ tests/
 │   │   ├── test_scanner.py
 │   │   ├── test_evaluator.py
 │   │   ├── test_pipeline_summary.py
-│   │   └── test_messenger.py   # Phase 4
+│   │   ├── test_messenger.py
+│   │   └── test_watchlist.py   # Phase 7
 │   ├── notifications/          # Phase 4
 │   │   └── test_ses.py
 │   ├── api/                    # Phase 4
@@ -196,6 +202,18 @@ infrastructure/
 - Never commit `.tfvars` files or manually edit `.tfstate`.
 - Never hardcode credentials — use AWS Secrets Manager.
 
+### Bedrock IAM Pattern
+Always use **two ARN resource entries** for `bedrock:InvokeModel` to support both on-demand models and cross-region inference profiles:
+```hcl
+Resource = [
+  "arn:aws:bedrock:*::foundation-model/*",
+  "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/*",
+]
+```
+Cross-region inference profiles (e.g., `us.anthropic.claude-3-5-haiku-20241022-v1:0`) use the `inference-profile` ARN with the account ID. On-demand models use the `foundation-model` ARN without account ID. A single-ARN policy will fail for one or the other.
+
+Before using a new Bedrock model, verify `aws bedrock get-foundation-model-availability --model-id <id>` shows `agreementAvailability.status: AVAILABLE`. If `NOT_AVAILABLE`, accept the agreement via: AWS Console → Amazon Bedrock → Model Access.
+
 ### Cost Management
 Feature flags keep idle costs at ~$4-10/month:
 - `enable_nat_gateway`: false (saves ~$100/month)
@@ -265,15 +283,16 @@ Feature flags keep idle costs at ~$4-10/month:
 | `src/dealfinder/agents/evaluator.py` | EvaluatorAgent Lambda (Bedrock → discount); returns `matched_feed_pairs` |
 | `src/dealfinder/agents/pipeline_summary.py` | PipelineSummaryAgent Lambda (per-feed no-deals, 24h dedup) |
 | `src/dealfinder/agents/messenger.py` | MessengerAgent Lambda (SQS → SNS/SES); `notify_no_deals_feed` |
-| `src/dealfinder/agents/bedrock.py` | BedrockPriceEstimator, BedrockSearchExtractor |
+| `src/dealfinder/agents/watchlist.py` | WatchlistAgent Lambda (Tavily + Bedrock trend discovery) |
+| `src/dealfinder/agents/bedrock.py` | BedrockPriceEstimator, BedrockSearchExtractor (`include_trends` flag) |
 | `src/dealfinder/agents/config.py` | AgentConfig pydantic-settings (incl. tavily_api_key) |
 | `src/dealfinder/notifications/sns.py` | SnsClient (boto3 SNS SMS) |
 | `src/dealfinder/notifications/ses.py` | SesClient (boto3 sesv2) |
 | `src/dealfinder/api/main.py` | FastAPI app + Mangum Lambda handler |
 | `src/dealfinder/api/routes/deals.py` | Deal endpoints (list, top, detail) |
 | `src/dealfinder/api/routes/search.py` | POST /search — Tavily + Bedrock enrichment |
-|| `src/dealfinder/api/routes/users.py` | User CRUD, preferences, watchlist matches (returns `last_scan_at`, `sources_scanned`), delete |
-|| `src/dealfinder/api/schemas.py` | Pydantic schemas; `DealListResponse` includes `last_scan_at` + `sources_scanned` |
+| `src/dealfinder/api/routes/users.py` | User CRUD, preferences, watchlist matches (returns `last_scan_at`, `sources_scanned`), delete |
+| `src/dealfinder/api/schemas.py` | Pydantic schemas; `DealListResponse` includes `last_scan_at` + `sources_scanned` |
 | `src/dealfinder/db/models.py` | All 5 ORM models |
 | `src/dealfinder/data/repository.py` | All 5 repository classes + BaseRepository |
 | `src/dealfinder/db/connection.py` | Async DB engine and session management |
@@ -326,6 +345,8 @@ cd frontend && npm run build
 - Don't access ORM relationships lazily in FastAPI route handlers — always use `selectinload()` in the query to avoid `MissingGreenlet` errors in async context.
 - Don't use `@app.on_event("startup")` in FastAPI — use the `lifespan` context manager pattern instead.
 - Don't write Alembic enum migrations that UPDATE a column before the new enum value exists — cast the column to `text` first, rename/replace the enum, update data, then cast back. PostgreSQL enforces enum constraints on UPDATE as well as INSERT.
+- Don't use `SQLEnum(MyEnum)` without `values_callable=lambda obj: [e.value for e in obj]` — the default sends the Python enum `.name` (uppercase) to PostgreSQL, but PostgreSQL enum types store lowercase values. Always add `values_callable` so SQLAlchemy sends `.value` (lowercase) instead of `.name`.
+- Don't invoke a Bedrock model via on-demand if it requires an inference profile — models with the `us.` prefix (e.g., `us.anthropic.claude-3-5-haiku-20241022-v1:0`) must be called as cross-region inference profiles. Check `get-foundation-model-availability` before choosing a model ID.
 - Don't set Terraform module output-wiring variables to `default = ""` — required infrastructure wiring (secret ARNs, topic ARNs) should have no default so misconfiguration fails at `terraform plan` time rather than silently at Lambda runtime.
 - Don't filter `Deal.discount_percentage >= 0` without also allowing NULL — SQL `NULL >= 0` evaluates to NULL (falsy), silently excluding unevaluated deals. Use `OR(discount_percentage IS NULL, discount_percentage >= threshold)` when 0 is a "match everything" sentinel.
 
