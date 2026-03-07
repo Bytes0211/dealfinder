@@ -10,6 +10,8 @@ Deal Finder is an AI-powered deal hunting system that discovers deals via RSS fe
 
 **Frontend (Session 13):** "Matched Deals" feed page (renamed from Feed) supports per-watchlist-entry filter toggle (client-side keyword filtering), scrollable deal grid with sticky watchlist section, and consistent page spacing across all pages.
 
+**Frontend (Session 14):** Preferences page now has an "Email Notifications" section: shows the user's Cognito email address and an opt-in checkbox that sets `notification_preferences.email = true`. MessengerAgent gates all SES dispatch on this flag. SES sandbox: `cottonbytes@gmail.com` verified as a sending/receiving identity.
+
 **Current Bedrock model:** `anthropic.claude-3-haiku-20240307-v1:0` (on-demand, agreement accepted)
 **Upgrade path:** Accept Claude 3.5 Haiku agreement in Bedrock console → switch to `us.anthropic.claude-3-5-haiku-20241022-v1:0`
 
@@ -351,6 +353,8 @@ cd frontend && npm run build
 - Don't invoke a Bedrock model via on-demand if it requires an inference profile — models with the `us.` prefix (e.g., `us.anthropic.claude-3-5-haiku-20241022-v1:0`) must be called as cross-region inference profiles. Check `get-foundation-model-availability` before choosing a model ID.
 - Don't set Terraform module output-wiring variables to `default = ""` — required infrastructure wiring (secret ARNs, topic ARNs) should have no default so misconfiguration fails at `terraform plan` time rather than silently at Lambda runtime.
 - Don't filter `Deal.discount_percentage >= 0` without also allowing NULL — SQL `NULL >= 0` evaluates to NULL (falsy), silently excluding unevaluated deals. Use `OR(discount_percentage IS NULL, discount_percentage >= threshold)` when 0 is a "match everything" sentinel.
+- Don't expect SES to send emails without verifying the recipient in sandbox mode — AWS SES starts in sandbox (`ProductionAccessEnabled: false`), which restricts sending to verified identities only. Verify recipient addresses via `aws sesv2 create-email-identity --email-identity <addr>` or request production access in the SES console. Check status with `aws sesv2 get-account --region us-east-1`.
+- Don't forget that `MessengerAgent` SES dispatch is gated on `user.notification_preferences.get("email", False)` — email notifications are opt-in. Users must enable them via the Preferences page checkbox; they are off by default.
 
 ## Reference Documentation
 

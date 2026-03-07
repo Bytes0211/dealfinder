@@ -2246,3 +2246,78 @@ The Matched Deals page was unaffected because `FeedPage` starts with a `<section
 
 **Session End:** March 7, 2026 04:40 UTC  
 **Status:** ✅ Frontend UX polish complete — feed filter, scrollable layout, spacing consistent across all pages
+
+---
+
+## Session 14: Email Notifications — SES Verification + Preferences UI (March 7, 2026)
+
+**Date:** March 7, 2026  
+**Time:** 05:10 – 18:10 UTC  
+**Phase:** Post Phase 7 — Notification delivery fix  
+**Branch:** `feature/email-notifications-pref`  
+**Status:** ✅ COMPLETE (pending PR merge + user opt-in)
+
+### Objective
+
+Diagnose why deal match emails were never received, fix the SES delivery blocker, and add an email notifications opt-in toggle to the Preferences page.
+
+---
+
+### Root Cause Analysis
+
+Two independent blockers prevented email delivery:
+
+#### 1. SES Sandbox Mode
+
+`aws sesv2 get-account` returned `"ProductionAccessEnabled": false`. AWS SES accounts start in sandbox mode, which restricts sending to **verified email identities only**. No recipient verification had been done, so every SES send attempt silently failed (or was blocked before reaching the Lambda).
+
+**Fix:** Verified `cottonbytes@gmail.com` as a sending/receiving identity:
+```bash
+aws sesv2 create-email-identity --email-identity cottonbytes@gmail.com --region us-east-1
+```
+AWS sent a verification email; clicking the link sets `VerifiedForSendingStatus: true`.
+
+**Long-term fix:** Request SES production access via AWS Console → SES → Account dashboard → "Request production access" (24–48h approval). This removes the verified-recipient restriction.
+
+#### 2. Email Notifications Opt-In Flag Not Set
+
+`MessengerAgent._dispatch()` and `notify_no_deals_feed()` both check:
+```python
+if not (user.email and prefs.get("email", False)):
+    continue
+```
+Email notifications default to **off**. The Preferences page only showed a phone number field — there was no UI to set `notification_preferences.email = True`, so no user could ever opt in.
+
+---
+
+### Fix — Preferences Page Email Toggle
+
+**File:** `frontend/src/pages/PreferencesPage.tsx`
+
+- Added `emailEnabled: boolean` state, seeded from `existing.notification_preferences?.email`.
+- Added "Email Notifications" section above SMS: shows the user's Cognito email address (read-only) with a checkbox to opt in.
+- `handleSubmit` now passes `notification_preferences: { email: emailEnabled }` alongside `phone_number`.
+- Build: ✅ `npm run build` clean.
+
+---
+
+### Deployment
+
+- Branch `feature/email-notifications-pref` pushed; PR open for merge to `main`.
+- Merge triggers `frontend.yml` → S3 sync + CloudFront invalidation.
+- After merge, user navigates to Preferences, checks "Enable email notifications", clicks Save.
+
+---
+
+### Lessons Learned
+
+1. **AWS SES sandbox blocks all unverified recipients** — New SES accounts cannot send to any address that hasn't been explicitly verified. This is a silent failure: the API call succeeds (or is never reached due to the opt-in flag) but no email is delivered. Always verify test recipient addresses immediately after enabling SES, and plan the production access request early.
+
+2. **Opt-in defaults must have UI** — `notification_preferences.email` defaulting to `False` is correct behavior, but the UI must expose the toggle or users can never enable it. Any backend opt-in flag needs a corresponding frontend control before the feature is considered complete.
+
+3. **Check `ProductionAccessEnabled` before declaring email working** — `SendingEnabled: true` does not mean production access. Always check both fields: `SendingEnabled` (can send at all) and `ProductionAccessEnabled` (can send to unverified addresses).
+
+---
+
+**Session End:** March 7, 2026 18:10 UTC  
+**Status:** ✅ SES identity verified, email toggle added — emails will flow once PR is merged and user opts in
