@@ -177,7 +177,7 @@ sequenceDiagram
     end
     Lambda-->>APIG: HTTP 200 JSON payload
     APIG-->>User: Response
-    note right of User: Latency target<br/>&lt; 1s P95
+    note right of User: Latency target<br/>< 1s P95
 ```
 
 ---
