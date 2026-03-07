@@ -46,10 +46,6 @@ export function FeedPage() {
   const authed = isAuthenticated();
   const userId = getUserId() ?? '';
 
-  // Watchlist edits
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editDiscount, setEditDiscount] = useState<number>(20);
-
   // Matched deals pagination
   const [matchOffset, setMatchOffset] = useState(0);
 
@@ -75,19 +71,6 @@ export function FeedPage() {
   } = useWatchlistMatches(userId, PAGE_SIZE, matchOffset, authed && savedFeeds.length > 0);
 
   // ── Watchlist helpers ──────────────────────────────────────
-
-  function startEdit(feed: SavedFeed) {
-    setEditingId(feed.id);
-    setEditDiscount(feed.min_discount);
-  }
-
-  function commitEdit(feed: SavedFeed) {
-    const updated = savedFeeds.map((f) =>
-      f.id === feed.id ? { ...f, min_discount: editDiscount } : f,
-    );
-    savePrefs({ saved_feeds: updated });
-    setEditingId(null);
-  }
 
   function removeFeed(feed: SavedFeed) {
     const updated = savedFeeds.filter((f) => f.id !== feed.id);
@@ -151,54 +134,15 @@ export function FeedPage() {
                 </div>
 
                 <div className="watchlist-card-actions">
-                  {editingId === feed.id ? (
-                    <>
-                      <label className="watchlist-discount-edit">
-                        <span>Min&nbsp;%</span>
-                        <input
-                          type="number"
-                          min={0}
-                          max={100}
-                          value={editDiscount}
-                          onChange={(e) => setEditDiscount(Number(e.target.value))}
-                          className="form-input form-input--sm"
-                        />
-                      </label>
-                      <button
-                        onClick={() => commitEdit(feed)}
-                        className="btn btn-primary btn-sm"
-                      >
-                        Save
-                      </button>
-                      <button
-                        onClick={() => setEditingId(null)}
-                        className="btn btn-outline btn-sm"
-                      >
-                        Cancel
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <span className="watchlist-discount-badge">
-                        ≥{feed.min_discount}%&nbsp;off
-                      </span>
                   <button
-                        onClick={() => startEdit(feed)}
-                        className="btn btn-outline btn-sm"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => toggleFeedFilter(feed.id)}
-                        className={`btn btn-sm ${
-                          activeFeedId === feed.id ? 'btn-filter-active' : 'btn-filter'
-                        }`}
-                        title={activeFeedId === feed.id ? 'Clear filter' : 'Filter deals to this item'}
-                      >
-                        {activeFeedId === feed.id ? '⊗ Filtered' : '⊕ Filter'}
-                      </button>
-                    </>
-                  )}
+                    onClick={() => toggleFeedFilter(feed.id)}
+                    className={`btn btn-sm ${
+                      activeFeedId === feed.id ? 'btn-filter-active' : 'btn-filter'
+                    }`}
+                    title={activeFeedId === feed.id ? 'Clear filter' : 'Filter deals to this item'}
+                  >
+                    {activeFeedId === feed.id ? '⊗ Filtered' : '⊕ Filter'}
+                  </button>
                   <button
                     onClick={() => removeFeed(feed)}
                     className="btn btn-danger btn-sm"

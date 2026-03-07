@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { isAxiosError } from 'axios';
 import { useSearch, useUpdatePreferences, useUserPreferences } from '../hooks';
@@ -19,7 +19,6 @@ function QualityBadge({ score }: { score: number }) {
 /** State tracked per search result row. */
 interface ResultState {
   selected: boolean;
-  minDiscount: number;
 }
 
 export function SearchPage() {
@@ -31,6 +30,14 @@ export function SearchPage() {
   const [resultStates, setResultStates] = useState<Record<number, ResultState>>({});
   const [savedIndexes, setSavedIndexes] = useState<Set<number>>(new Set());
   const [saveMsg, setSaveMsg] = useState('');
+  const [modelName, setModelName] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch('/config/bedrock_models.json')
+      .then((r) => r.json())
+      .then((data) => setModelName(data.search_extractor ?? data.default ?? null))
+      .catch(() => setModelName(null));
+  }, []);
 
   const {
     mutate: search,
@@ -65,15 +72,7 @@ export function SearchPage() {
       ...prev,
       [i]: {
         selected: !prev[i]?.selected,
-        minDiscount: prev[i]?.minDiscount ?? 20,
       },
-    }));
-  }
-
-  function setMinDiscount(i: number, value: number) {
-    setResultStates((prev) => ({
-      ...prev,
-      [i]: { ...prev[i], selected: prev[i]?.selected ?? false, minDiscount: value },
     }));
   }
 
@@ -101,7 +100,6 @@ export function SearchPage() {
       title: r.title,
       url: r.url,
       current_price: r.current_price,
-      min_discount: Math.round(Number.isFinite(resultStates[i]?.minDiscount) ? resultStates[i].minDiscount : 20),
       quality_score: r.quality_score,
       quality_reason: r.quality_reason,
       saved_at: new Date().toISOString(),
@@ -151,7 +149,8 @@ export function SearchPage() {
     <div className="page">
       <h1>Search for Deals</h1>
       <p className="page-subtitle">
-        Describe what you're looking for — an agentic AI-powered search.
+        Describe what you're looking for — an agentic AI-powered search
+        {modelName ? ` using ${modelName}.` : '.'}
       </p>
 
       <form onSubmit={handleSearch} className="search-form">
@@ -188,7 +187,7 @@ export function SearchPage() {
             </thead>
             <tbody>
               {results.map((result, i) => {
-                const state = resultStates[i] ?? { selected: false, minDiscount: 20 };
+                const state = resultStates[i] ?? { selected: false };
                 const isSaved = savedIndexes.has(i);
                 return (
                   <tr
@@ -224,20 +223,6 @@ export function SearchPage() {
                     </td>
 
                     <td className="search-row-actions">
-                      {state.selected && !isSaved && (
-                        <label className="search-result-discount">
-                          <span>Min&nbsp;%</span>
-                          <input
-                            type="number"
-                            min={0}
-                            max={100}
-                            step={1}
-                            value={state.minDiscount}
-                            onChange={(e) => setMinDiscount(i, Number(e.target.value))}
-                            className="form-input form-input--sm"
-                          />
-                        </label>
-                      )}
                       {isSaved && <span className="badge badge--ok">Saved ✔</span>}
                     </td>
                   </tr>

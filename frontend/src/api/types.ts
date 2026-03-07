@@ -41,7 +41,6 @@ export interface SavedFeed {
   title: string;
   url: string;
   current_price: string | null;
-  min_discount: number;
   quality_score: number | null;
   quality_reason: string | null;
   saved_at: string;
