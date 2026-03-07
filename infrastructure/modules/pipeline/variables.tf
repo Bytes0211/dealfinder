@@ -128,3 +128,22 @@ variable "db_name" {
   type        = string
   default     = "dealfinder"
 }
+
+variable "tavily_api_key" {
+  description = "Tavily API key for the WatchlistAgent web search calls"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "enable_watchlist_schedule" {
+  description = "Enable EventBridge schedule to trigger the WatchlistAgent automatically"
+  type        = bool
+  default     = false
+}
+
+variable "watchlist_schedule_expression" {
+  description = "EventBridge schedule expression for the WatchlistAgent (cron or rate)"
+  type        = string
+  default     = "rate(30 minutes)"
+}

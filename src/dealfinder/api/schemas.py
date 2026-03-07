@@ -27,10 +27,21 @@ class DealResponse(BaseModel):
         original_price: Original retail price (if available).
         estimated_value: Bedrock-estimated fair market value.
         discount_percentage: Calculated discount percentage.
-    is_high_value: True if the deal meets the discount threshold.
+        is_high_value: True if the deal meets the discount threshold.
         brand: Brand name.
         status: Deal processing status.
         source_name: Name of the RSS feed source.
+        trend: Inferred demand trend — ``"upward"``, ``"downward"``, or ``"stable"``.
+            Only present on WatchlistAgent-discovered deals.
+        trend_confidence: Confidence score 0.0–1.0 for the trend assessment.
+        price_trend: Price direction — ``"increasing"``, ``"decreasing"``, or ``"stable"``.
+        discount_frequency: How often the product is discounted — ``"low"``, ``"medium"``,
+            or ``"high"``.
+        stockouts_last_30_days: Estimated number of stockout events in the last 30 days.
+        review_velocity: Rate of new customer reviews — ``"low"``, ``"medium"``, or ``"high"``.
+        competitor_activity: Competitor pricing activity — ``"stable"``, ``"increasing"``,
+            or ``"decreasing"``.
+        trend_summary: Brief natural-language explanation of the trend (max 20 words).
     """
 
     id: UUID
@@ -44,6 +55,16 @@ class DealResponse(BaseModel):
     brand: Optional[str] = None
     status: str
     source_name: Optional[str] = None
+
+    # Trend analysis fields — populated from raw_data for WatchlistAgent deals.
+    trend: Optional[str] = None
+    trend_confidence: Optional[float] = None
+    price_trend: Optional[str] = None
+    discount_frequency: Optional[str] = None
+    stockouts_last_30_days: Optional[int] = None
+    review_velocity: Optional[str] = None
+    competitor_activity: Optional[str] = None
+    trend_summary: Optional[str] = None
 
     model_config = {"from_attributes": True}
 

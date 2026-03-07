@@ -169,6 +169,9 @@ module "pipeline" {
   enable_schedule     = var.enable_pipeline_schedule
   schedule_expression = var.pipeline_schedule_expression
 
+  tavily_api_key             = var.tavily_api_key
+  enable_watchlist_schedule  = true
+
   db_secret_arn = try(module.aurora[0].secret_arn, "")
   db_host       = try(module.aurora[0].cluster_endpoint, "")
   db_name       = var.aurora_database_name

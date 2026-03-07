@@ -47,8 +47,8 @@ a:hover { text-decoration: underline; }
 .navbar-links a.active, .navbar-links a:hover { color: var(--c-primary); }
 .navbar-auth { margin-left: auto; }
 
-.app-header-icon { padding: .5rem 1.5rem 0; }
-.app-header-icon img { height: 160px; width: auto; display: block; }
+.app-header-icon { padding: .25rem 1.5rem 0; }
+.app-header-icon img { height: 200px; width: auto; display: block; }
 
 .main-content { max-width: 1100px; margin: 0 auto; padding: 1.5rem 1rem; }
 
@@ -400,7 +400,37 @@ h1 { font-size: 1.6rem; font-weight: 700; }
 .badge--ok { background: #d1e7dd; color: var(--c-success); }
 .search-actions { display: flex; gap: .75rem; flex-wrap: wrap; }
 
-/* ── Misc ─────────────────────────────────────────── */
+/* ── Trend analysis ─────────────────────────────────────── */
+.match-card { display: flex; flex-direction: column; }
+.match-card-trend {
+  padding: .4rem .75rem .5rem;
+  border: 1px solid var(--c-border);
+  border-top: none;
+  border-radius: 0 0 var(--radius) var(--radius);
+  background: var(--c-bg);
+  display: flex;
+  flex-direction: column;
+  gap: .2rem;
+}
+.match-card .deal-card { border-radius: var(--radius) var(--radius) 0 0; }
+.trend-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: .25rem;
+  font-size: .78rem;
+  font-weight: 700;
+  padding: .15rem .45rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.trend-badge--up { background: #d1e7dd; color: #146c43; }
+.trend-badge--down { background: #f8d7da; color: #842029; }
+.trend-badge--stable { background: #e9ecef; color: #495057; }
+.trend-signals { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.trend-signals-text { font-size: .78rem; color: var(--c-muted); }
+.trend-summary { margin: 0; font-size: .8rem; color: var(--c-muted); font-style: italic; }
+
+/* ── Misc ────────────────────────────────────────────────── */
 .state-msg { color: var(--c-muted); font-size: .9rem; padding: 2rem 0; text-align: center; }
 .state-msg--left { text-align: left; padding: .5rem 0; }
 .state-msg--error { color: var(--c-danger); }

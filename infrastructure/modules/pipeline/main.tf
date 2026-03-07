@@ -102,6 +102,12 @@ resource "aws_cloudwatch_log_group" "pipeline_summary" {
   tags              = var.tags
 }
 
+resource "aws_cloudwatch_log_group" "watchlist" {
+  name              = "/aws/lambda/${local.prefix}-watchlist"
+  retention_in_days = var.log_retention_days
+  tags              = var.tags
+}
+
 # ─────────────────────────────────────────────
 # Data Sources
 # ─────────────────────────────────────────────
@@ -215,6 +221,51 @@ resource "aws_iam_role_policy" "pipeline_summary_inline" {
           "dynamodb:PutItem",
         ]
         Resource = aws_dynamodb_table.pipeline_dedup.arn
+      },
+      {
+        Sid      = "SecretsManager"
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/${var.environment}/*"
+      },
+    ]
+  })
+}
+
+# Watchlist Lambda role
+resource "aws_iam_role" "watchlist" {
+  name               = "${local.prefix}-watchlist-role"
+  assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
+  tags               = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "watchlist_basic" {
+  role       = aws_iam_role.watchlist.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+}
+
+resource "aws_iam_role_policy" "watchlist_inline" {
+  name = "${local.prefix}-watchlist-policy"
+  role = aws_iam_role.watchlist.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Logs"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+        ]
+        Resource = "${aws_cloudwatch_log_group.watchlist.arn}:*"
+      },
+      {
+        Sid      = "Bedrock"
+        Effect   = "Allow"
+        Action   = ["bedrock:InvokeModel"]
+        Resource = "arn:aws:bedrock:${var.aws_region}::foundation-model/${var.bedrock_model_id}"
       },
       {
         Sid      = "SecretsManager"
@@ -408,6 +459,50 @@ resource "aws_lambda_function" "pipeline_summary" {
   lifecycle {
     ignore_changes = [filename, source_code_hash]
   }
+}
+
+resource "aws_lambda_function" "watchlist" {
+  function_name = "${local.prefix}-watchlist"
+  description   = "WatchlistAgent — scheduled Tavily + Bedrock deal discovery from saved feeds"
+  role          = aws_iam_role.watchlist.arn
+  runtime       = var.lambda_runtime
+  handler       = "dealfinder.agents.watchlist.handler"
+  filename      = data.archive_file.placeholder.output_path
+  timeout       = var.lambda_timeout_seconds
+  memory_size   = var.lambda_memory_mb
+
+  vpc_config {
+    subnet_ids         = var.private_subnet_ids
+    security_group_ids = [aws_security_group.lambda.id]
+  }
+
+  environment {
+    variables = {
+      DEALFINDER_TAVILY_API_KEY   = var.tavily_api_key
+      DEALFINDER_BEDROCK_REGION   = var.aws_region
+      DEALFINDER_BEDROCK_MODEL_ID = var.bedrock_model_id
+      DB_HOST                     = var.db_host
+      DB_NAME                     = var.db_name
+      DB_SECRET_ARN               = var.db_secret_arn
+    }
+  }
+
+  depends_on = [aws_cloudwatch_log_group.watchlist]
+
+  tags = merge(var.tags, { Name = "${local.prefix}-watchlist" })
+
+  lifecycle {
+    ignore_changes = [filename, source_code_hash]
+  }
+}
+
+resource "aws_lambda_permission" "watchlist_eventbridge" {
+  count         = var.enable_watchlist_schedule ? 1 : 0
+  statement_id  = "AllowEventBridgeInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.watchlist.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.watchlist_schedule[0].arn
 }
 
 resource "aws_lambda_function" "evaluator" {
@@ -739,6 +834,25 @@ resource "aws_cloudwatch_event_target" "pipeline_schedule" {
   arn      = aws_sfn_state_machine.pipeline.arn
   role_arn = aws_iam_role.eventbridge.arn
   input    = jsonencode({})
+}
+
+# ─────────────────────────────────────────────
+# EventBridge — Watchlist Agent Schedule
+# ─────────────────────────────────────────────
+
+resource "aws_cloudwatch_event_rule" "watchlist_schedule" {
+  count               = var.enable_watchlist_schedule ? 1 : 0
+  name                = "${local.prefix}-watchlist-schedule"
+  description         = "Trigger the WatchlistAgent Lambda on a schedule"
+  schedule_expression = var.watchlist_schedule_expression
+  state               = "ENABLED"
+  tags                = var.tags
+}
+
+resource "aws_cloudwatch_event_target" "watchlist_schedule" {
+  count = var.enable_watchlist_schedule ? 1 : 0
+  rule  = aws_cloudwatch_event_rule.watchlist_schedule[0].name
+  arn   = aws_lambda_function.watchlist.arn
 }
 
 # ─────────────────────────────────────────────

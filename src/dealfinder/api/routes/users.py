@@ -411,6 +411,15 @@ async def watchlist_matches(
             brand=deal.brand,
             status=deal.status.value,
             source_name=deal.source.name if deal.source else None,
+            # Trend analysis — populated from raw_data for WatchlistAgent deals.
+            trend=(deal.raw_data or {}).get("trend"),
+            trend_confidence=(deal.raw_data or {}).get("trend_confidence"),
+            price_trend=(deal.raw_data or {}).get("price_trend"),
+            discount_frequency=(deal.raw_data or {}).get("discount_frequency"),
+            stockouts_last_30_days=(deal.raw_data or {}).get("stockouts_last_30_days"),
+            review_velocity=(deal.raw_data or {}).get("review_velocity"),
+            competitor_activity=(deal.raw_data or {}).get("competitor_activity"),
+            trend_summary=(deal.raw_data or {}).get("trend_summary"),
         )
         for deal in deals
     ]

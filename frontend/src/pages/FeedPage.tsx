@@ -4,7 +4,7 @@ import { DealCard } from '../components/DealCard';
 import { Pagination } from '../components/Pagination';
 import { useUserPreferences, useUpdatePreferences, useWatchlistMatches } from '../hooks';
 import { isAuthenticated, getUserId, login } from '../auth';
-import type { SavedFeed } from '../api/types';
+import type { SavedFeed, DealResponse } from '../api/types';
 
 const PAGE_SIZE = 20;
 
@@ -14,6 +14,32 @@ function QualityBadge({ score }: { score: number | null }) {
   if (score >= 8) return <span className="quality-badge quality-badge--great">🟢 Great</span>;
   if (score >= 5) return <span className="quality-badge quality-badge--fair">🟡 Fair</span>;
   return <span className="quality-badge quality-badge--weak">🔴 Weak</span>;
+}
+
+/** Trend badge — shows demand direction with confidence for WatchlistAgent deals. */
+function TrendBadge({ trend, confidence }: { trend: string | null; confidence: number | null }) {
+  if (!trend) return null;
+  const icon = trend === 'upward' ? '↑' : trend === 'downward' ? '↓' : '→';
+  const cls = trend === 'upward' ? 'trend-badge--up' : trend === 'downward' ? 'trend-badge--down' : 'trend-badge--stable';
+  const label = trend.charAt(0).toUpperCase() + trend.slice(1);
+  const pct = confidence != null ? ` ${Math.round(confidence * 100)}%` : '';
+  return <span className={`trend-badge ${cls}`}>{icon} {label}{pct}</span>;
+}
+
+/** Compact trend signals row */
+function TrendSignals({ deal }: { deal: DealResponse }) {
+  if (!deal.trend) return null;
+  const parts: string[] = [];
+  if (deal.price_trend) parts.push(`Price: ${deal.price_trend}`);
+  if (deal.discount_frequency) parts.push(`Discounts: ${deal.discount_frequency}`);
+  if (deal.review_velocity) parts.push(`Reviews: ${deal.review_velocity}`);
+  if (deal.competitor_activity) parts.push(`Competitors: ${deal.competitor_activity}`);
+  return (
+    <div className="trend-signals">
+      <TrendBadge trend={deal.trend} confidence={deal.trend_confidence} />
+      {parts.length > 0 && <span className="trend-signals-text">{parts.join(' · ')}</span>}
+    </div>
+  );
 }
 
 export function FeedPage() {
@@ -165,7 +191,7 @@ export function FeedPage() {
         <section className="feed-section">
           <h2>Matched Deals</h2>
           <p className="section-subtitle">
-            RSS deals from your feeds that meet your minimum discount thresholds.
+            Deals discovered for your watchlist queries, enriched with Bedrock trend analysis.
           </p>
 
           {matchLoading && <p className="state-msg state-msg--left">Loading matches…</p>}
@@ -184,9 +210,19 @@ export function FeedPage() {
               ) : (
                 <>
                   <p className="result-count">{matchData.total} matched deals</p>
-                  <div className="deal-grid">
+                <div className="deal-grid">
                     {matchData.items.map((deal) => (
-                      <DealCard key={deal.id} deal={deal} />
+                      <div key={deal.id} className="match-card">
+                        <DealCard deal={deal} />
+                        {deal.trend && (
+                          <div className="match-card-trend">
+                            <TrendSignals deal={deal} />
+                            {deal.trend_summary && (
+                              <p className="trend-summary">{deal.trend_summary}</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     ))}
                   </div>
                   <Pagination

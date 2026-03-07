@@ -8,7 +8,7 @@
 #   ./scripts/deploy-lambda.sh dev api scanner evaluator       # multiple
 #   ./scripts/deploy-lambda.sh prod api scanner evaluator messenger
 #
-# Supported function names: api, scanner, evaluator, messenger, pipeline-summary
+# Supported function names: api, scanner, evaluator, messenger, pipeline-summary, watchlist
 
 set -e
 
@@ -18,7 +18,7 @@ shift || true
 # Default: deploy all four if none specified
 FUNCTIONS=("${@}")
 if [ ${#FUNCTIONS[@]} -eq 0 ]; then
-  FUNCTIONS=(api scanner evaluator messenger pipeline-summary)
+  FUNCTIONS=(api scanner evaluator messenger pipeline-summary watchlist)
 fi
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"

@@ -9,7 +9,12 @@ from decimal import Decimal
 
 import pytest
 
-from dealfinder.agents.bedrock import BedrockPriceEstimator, PriceEstimationResult, _sanitize
+from dealfinder.agents.bedrock import (
+    BedrockPriceEstimator,
+    BedrockSearchExtractor,
+    PriceEstimationResult,
+    _sanitize,
+)
 from dealfinder.agents.config import AgentConfig
 
 
@@ -275,6 +280,49 @@ class TestSanitize:
     def test_short_clean_string_unchanged(self) -> None:
         """Input shorter than max_len with no special characters is returned as-is."""
         assert _sanitize("Sony Headphones") == "Sony Headphones"
+
+
+@pytest.fixture
+def extractor() -> BedrockSearchExtractor:
+    """BedrockSearchExtractor with test config (no real AWS credentials needed)."""
+    config = AgentConfig(
+        bedrock_region="us-east-1",
+        bedrock_model_id="anthropic.claude-3-sonnet-20240229-v1:0",
+        notification_queue_url="",
+    )
+    return BedrockSearchExtractor(config=config)
+
+
+class TestBedrockSearchExtractorPrompt:
+    """Tests for BedrockSearchExtractor._build_extraction_prompt."""
+
+    def test_extract_without_trends_omits_trend_fields(
+        self, extractor: BedrockSearchExtractor
+    ) -> None:
+        """Default call (include_trends=False) should not include trend field names in prompt."""
+        results = [{"title": "Widget", "url": "https://example.com", "content": "Great deal"}]
+        prompt = extractor._build_extraction_prompt(results, include_trends=False)
+        assert "trend" not in prompt
+        assert "trend_confidence" not in prompt
+        assert "review_velocity" not in prompt
+
+    def test_extract_with_trends_includes_trend_fields(
+        self, extractor: BedrockSearchExtractor
+    ) -> None:
+        """include_trends=True should add all 8 trend field names to the prompt."""
+        results = [{"title": "Widget", "url": "https://example.com", "content": "Great deal"}]
+        prompt = extractor._build_extraction_prompt(results, include_trends=True)
+        for field in (
+            "trend",
+            "trend_confidence",
+            "price_trend",
+            "discount_frequency",
+            "stockouts_last_30_days",
+            "review_velocity",
+            "competitor_activity",
+            "trend_summary",
+        ):
+            assert field in prompt, f"Expected '{field}' in trend prompt"
 
 
 class TestBuildPromptSanitization:

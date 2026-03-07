@@ -290,11 +290,12 @@ class BedrockSearchExtractor:
             )
         return self._client
 
-    def _build_extraction_prompt(self, results: list[dict]) -> str:
+    def _build_extraction_prompt(self, results: list[dict], include_trends: bool = False) -> str:
         """Build a structured extraction + quality scoring prompt for Claude.
 
         Args:
             results: List of raw Tavily result dicts with title, url, content keys.
+            include_trends: If True, append trend analysis fields to the output schema.
 
         Returns:
             Formatted prompt string ready to be sent to Claude.
@@ -308,21 +309,47 @@ class BedrockSearchExtractor:
             for r in results
         ]
         results_json = json.dumps(condensed, indent=2)
-        return (
-            "You are a deal analysis assistant. Given these web search result snippets, "
-            "extract and score each result as a potential product deal.\n\n"
+
+        fields = (
             "For each result return:\n"
             "- title: Clean product name (remove store names and marketing filler)\n"
             "- url: The product URL exactly as provided\n"
             "- current_price: Current sale price as a string (e.g. \"$279.99\") or null if not found\n"
-            "- quality_score: Float 0.0–10.0 rating the deal quality\n"
+            "- quality_score: Float 0.0\u201310.0 rating the deal quality\n"
             "  (10 = exceptional value vs typical retail, 0 = poor value or no deal)\n"
             "  Base this on: price vs known typical retail, brand reputation, discount signals\n"
-            "- quality_reason: Max 15-word explanation of the score\n\n"
+            "- quality_reason: Max 15-word explanation of the score"
+        )
+        example = (
+            '"title": "...", "url": "...", "current_price": "...", '
+            '"quality_score": 7.5, "quality_reason": "..."'
+        )
+
+        if include_trends:
+            fields += (
+                "\n- trend: \"upward\" | \"downward\" | \"stable\" \u2014 inferred demand trend\n"
+                "- trend_confidence: Float 0.0\u20131.0 \u2014 confidence in trend assessment\n"
+                "- price_trend: \"increasing\" | \"decreasing\" | \"stable\"\n"
+                "- discount_frequency: \"low\" | \"medium\" | \"high\" \u2014 how often this product is discounted\n"
+                "- stockouts_last_30_days: Integer 0\u201310 estimate of stockout events, or null if unknown\n"
+                "- review_velocity: \"low\" | \"medium\" | \"high\" \u2014 rate of new customer reviews\n"
+                "- competitor_activity: \"stable\" | \"increasing\" | \"decreasing\"\n"
+                "- trend_summary: Max 20-word explanation of the overall demand trend"
+            )
+            example += (
+                ', "trend": "upward", "trend_confidence": 0.75, "price_trend": "stable",'
+                ' "discount_frequency": "low", "stockouts_last_30_days": 2,'
+                ' "review_velocity": "high", "competitor_activity": "stable",'
+                ' "trend_summary": "..."'
+            )
+
+        return (
+            "You are a deal analysis assistant. Given these web search result snippets, "
+            "extract and score each result as a potential product deal.\n\n"
+            f"{fields}\n\n"
             f"Search results:\n{results_json}\n\n"
-            "Respond with ONLY a JSON array — no markdown, no explanation:\n"
-            '[{"title": "...", "url": "...", "current_price": "...", '
-            '"quality_score": 7.5, "quality_reason": "..."}]'
+            "Respond with ONLY a JSON array \u2014 no markdown, no explanation:\n"
+            f"[{{{example}}}]"
         )
 
     def _parse_extraction_response(self, response_text: str, original: list[dict]) -> list:
@@ -352,15 +379,19 @@ class BedrockSearchExtractor:
             for r in original
         ]
 
-    def extract(self, results: list[dict]) -> list[dict]:
+    def extract(self, results: list[dict], include_trends: bool = False) -> list[dict]:
         """Extract and score product data from Tavily search results via Claude.
 
         Args:
             results: List of raw Tavily result dicts (title, url, content).
+            include_trends: If True, also extract trend analysis fields (trend,
+                trend_confidence, price_trend, discount_frequency,
+                stockouts_last_30_days, review_velocity, competitor_activity,
+                trend_summary) for each result.
 
         Returns:
             List of enriched result dicts with title, url, current_price,
-            quality_score, and quality_reason fields.
+            quality_score, quality_reason, and optionally trend fields.
 
         Raises:
             ClientError: If the Bedrock API call fails.
@@ -368,7 +399,7 @@ class BedrockSearchExtractor:
         if not results:
             return []
 
-        prompt = self._build_extraction_prompt(results)
+        prompt = self._build_extraction_prompt(results, include_trends=include_trends)
         body = json.dumps({
             "anthropic_version": "bedrock-2023-05-31",
             "max_tokens": 1024,

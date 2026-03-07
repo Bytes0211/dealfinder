@@ -11,6 +11,15 @@ export interface DealResponse {
   brand: string | null;
   status: string;
   source_name: string | null;
+  // Trend analysis — only present on WatchlistAgent-discovered deals.
+  trend: 'upward' | 'downward' | 'stable' | null;
+  trend_confidence: number | null;
+  price_trend: 'increasing' | 'decreasing' | 'stable' | null;
+  discount_frequency: 'low' | 'medium' | 'high' | null;
+  stockouts_last_30_days: number | null;
+  review_velocity: 'low' | 'medium' | 'high' | null;
+  competitor_activity: 'stable' | 'increasing' | 'decreasing' | null;
+  trend_summary: string | null;
 }
 
 /** Mirrors backend DealListResponse Pydantic schema. */
