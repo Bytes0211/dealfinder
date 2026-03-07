@@ -18,6 +18,7 @@ export function PreferencesPage() {
 
   const [phoneNumber, setPhoneNumber] = useState('');
   const [phoneError, setPhoneError] = useState('');
+  const [emailEnabled, setEmailEnabled] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteMsg, setDeleteMsg] = useState('');
 
@@ -25,6 +26,7 @@ export function PreferencesPage() {
   useEffect(() => {
     if (!existing) return;
     if (existing.phone_number) setPhoneNumber(existing.phone_number);
+    setEmailEnabled(existing.notification_preferences?.email === true);
   }, [existing]);
 
   function handleSubmit(e: React.FormEvent) {
@@ -35,7 +37,10 @@ export function PreferencesPage() {
       setPhoneError('Enter a valid E.164 number, e.g. +12125551234');
       return;
     }
-    mutate({ phone_number: phone || null });
+    mutate({
+      phone_number: phone || null,
+      notification_preferences: { email: emailEnabled },
+    });
   }
 
   function handleDeleteAccount() {
@@ -53,6 +58,23 @@ export function PreferencesPage() {
     <div className="page page--narrow">
       <h1>Preferences</h1>
       <p className="page-subtitle">Manage your notification channels and account settings.</p>
+
+      {/* ──── Email Notifications */}
+      <section className="pref-section">
+        <h2>Email Notifications</h2>
+        <p className="section-subtitle">
+          Deal alerts and watchlist updates will be sent to{' '}
+          <strong>{existing?.email ?? 'your account email'}</strong>.
+        </p>
+        <label className="form-label" style={{ flexDirection: 'row', alignItems: 'center', gap: '.6rem', cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={emailEnabled}
+            onChange={(e) => setEmailEnabled(e.target.checked)}
+          />
+          Enable email notifications
+        </label>
+      </section>
 
       {/* ──── Phone Notifications */}
       <section className="pref-section">
