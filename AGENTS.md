@@ -12,8 +12,9 @@ Deal Finder is an AI-powered deal hunting system that discovers deals via RSS fe
 
 **Frontend (Session 14):** Preferences page now has an "Email Notifications" section: shows the user's Cognito email address and an opt-in checkbox that sets `notification_preferences.email = true`. MessengerAgent gates all SES dispatch on this flag. SES sandbox: `cottonbytes@gmail.com` verified as a sending/receiving identity.
 
+**Bedrock model config:** All model IDs are centralised in `config/bedrock_models.json`. Edit that file to change models for all agents and Terraform modules at once. Per-Lambda overrides are still possible via the `DEALFINDER_BEDROCK_MODEL_ID` environment variable.
 **Current Bedrock model:** `anthropic.claude-3-haiku-20240307-v1:0` (on-demand, agreement accepted)
-**Upgrade path:** Accept Claude 3.5 Haiku agreement in Bedrock console → switch to `us.anthropic.claude-3-5-haiku-20241022-v1:0`
+**Upgrade path:** Accept Claude 3.5 Haiku agreement in Bedrock console → update `config/bedrock_models.json` to `us.anthropic.claude-3-5-haiku-20241022-v1:0` → redeploy
 
 ## Architecture
 
@@ -54,9 +55,11 @@ EventBridge (schedule) → Scanner → Evaluate → Decide (discount > threshold
 ## Project Structure
 
 ```
+config/
+└── bedrock_models.json     # Central Bedrock model IDs (single source of truth)
 src/dealfinder/
 ├── agents/
-│   ├── config.py           # AgentConfig (pydantic-settings, env_prefix=DEALFINDER_)
+│   ├── config.py           # AgentConfig (pydantic-settings, env_prefix=DEALFINDER_; loads bedrock_models.json)
 │   ├── bedrock.py          # BedrockPriceEstimator, BedrockSearchExtractor
 │   ├── scanner.py          # ScannerAgent + Lambda handler
 │   ├── evaluator.py        # EvaluatorAgent + Lambda handler; returns matched_feed_pairs

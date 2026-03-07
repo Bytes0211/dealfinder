@@ -176,13 +176,10 @@ variable "ses_sender_email" {
   default     = ""
 }
 
-variable "messenger_bedrock_model_id" {
-  description = "Bedrock model ID for the MessengerAgent"
-  type        = string
-  default     = "anthropic.claude-3-sonnet-20240229-v1:0"
-}
+# NOTE: Bedrock model IDs are now loaded from config/bedrock_models.json
+# in main.tf locals. No per-environment variable needed.
 
-# ── Tavily Search ─────────────────────────────────────────────────────────────
+# ── Tavily Search
 
 variable "tavily_api_key" {
   description = "Tavily Search API key for the web search endpoint"

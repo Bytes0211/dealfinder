@@ -63,9 +63,8 @@ variable "lambda_runtime" {
 }
 
 variable "bedrock_model_id" {
-  description = "AWS Bedrock model ID for message crafting"
+  description = "AWS Bedrock model ID for message crafting (set from config/bedrock_models.json)"
   type        = string
-  default     = "anthropic.claude-3-haiku-20240307-v1:0"
 }
 
 variable "db_secret_arn" {

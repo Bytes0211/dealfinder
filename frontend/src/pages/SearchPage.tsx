@@ -151,7 +151,7 @@ export function SearchPage() {
     <div className="page">
       <h1>Search for Deals</h1>
       <p className="page-subtitle">
-        Describe what you're looking for. Powered by Bedrock (Claude) and Tavily.
+        Describe what you're looking for — an agentic AI-powered search.
       </p>
 
       <form onSubmit={handleSearch} className="search-form">

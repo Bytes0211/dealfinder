@@ -1,0 +1,8 @@
+{
+  "_comment": "Central Bedrock model configuration. Update model IDs here when AWS deprecates or you upgrade models.",
+  "default": "anthropic.claude-3-haiku-20240307-v1:0",
+  "estimator": "anthropic.claude-3-haiku-20240307-v1:0",
+  "messenger": "anthropic.claude-3-haiku-20240307-v1:0",
+  "search_extractor": "anthropic.claude-3-haiku-20240307-v1:0",
+  "watchlist": "anthropic.claude-3-haiku-20240307-v1:0"
+}

@@ -35,6 +35,8 @@ locals {
     Environment = var.environment
     ManagedBy   = "terraform"
   }
+
+  bedrock_models = jsondecode(file("${path.module}/../../../config/bedrock_models.json"))
 }
 
 # ── Networking ──────────────────────────────────────────────────────────────
@@ -169,8 +171,9 @@ module "pipeline" {
   enable_schedule     = var.enable_pipeline_schedule
   schedule_expression = var.pipeline_schedule_expression
 
-  tavily_api_key             = var.tavily_api_key
-  enable_watchlist_schedule  = true
+  tavily_api_key            = var.tavily_api_key
+  enable_watchlist_schedule = true
+  bedrock_model_id          = local.bedrock_models.default
 
   db_secret_arn = try(module.aurora[0].secret_arn, "")
   db_host       = try(module.aurora[0].cluster_endpoint, "")
@@ -198,11 +201,11 @@ module "notifications" {
   alarm_sns_topic_arn      = module.cloudwatch.alarms_topic_arn
   create_cloudwatch_alarms = true
 
-  bedrock_model_id    = var.messenger_bedrock_model_id
-  db_secret_arn       = try(module.aurora[0].secret_arn, "")
-  db_host             = try(module.aurora[0].cluster_endpoint, "")
-  db_name             = var.aurora_database_name
-  ses_sender_email    = var.ses_sender_email
+  bedrock_model_id = local.bedrock_models.messenger
+  db_secret_arn    = try(module.aurora[0].secret_arn, "")
+  db_host          = try(module.aurora[0].cluster_endpoint, "")
+  db_name          = var.aurora_database_name
+  ses_sender_email = var.ses_sender_email
 
   tags = local.common_tags
 }

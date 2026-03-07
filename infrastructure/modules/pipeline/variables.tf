@@ -81,9 +81,8 @@ variable "discount_threshold" {
 }
 
 variable "bedrock_model_id" {
-  description = "AWS Bedrock model ID for price estimation"
+  description = "AWS Bedrock model ID for price estimation (set from config/bedrock_models.json)"
   type        = string
-  default     = "anthropic.claude-3-haiku-20240307-v1:0"
 }
 
 # SQS configuration
