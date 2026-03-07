@@ -182,7 +182,7 @@ class TestCheckUnmatchedFeeds:
         feed_id = "feed-abc"
         feed_name = "Sony headphones"
         user = _make_mock_user(user_id=user_id, saved_feeds=[
-            {"id": feed_id, "query": feed_name, "min_discount": 0},
+            {"id": feed_id, "query": feed_name},
         ])
         mock_session, mock_user_repo = self._make_mock_session(users=[user])
 
@@ -211,7 +211,7 @@ class TestCheckUnmatchedFeeds:
         user_id = str(uuid4())
         feed_id = "feed-xyz"
         user = _make_mock_user(user_id=user_id, saved_feeds=[
-            {"id": feed_id, "query": "Apple AirPods", "min_discount": 0},
+            {"id": feed_id, "query": "Apple AirPods"},
         ])
         mock_session, mock_user_repo = self._make_mock_session(users=[user])
         matched_pairs = [{"user_id": user_id, "feed_id": feed_id, "feed_name": "Apple AirPods"}]
@@ -236,7 +236,7 @@ class TestCheckUnmatchedFeeds:
         agent = PipelineSummaryAgent(config=config)
         user_id = str(uuid4())
         user = _make_mock_user(user_id=user_id, saved_feeds=[
-            {"id": "feed-1", "query": "Laptop", "min_discount": 0},
+            {"id": "feed-1", "query": "Laptop"},
         ])
         mock_session, mock_user_repo = self._make_mock_session(users=[user])
 
@@ -254,7 +254,7 @@ class TestCheckUnmatchedFeeds:
         """Feeds missing an id field should be silently skipped."""
         config = _make_config()
         agent = PipelineSummaryAgent(config=config)
-        user = _make_mock_user(saved_feeds=[{"query": "Laptop", "min_discount": 0}])
+        user = _make_mock_user(saved_feeds=[{"query": "Laptop"}])
         mock_session, mock_user_repo = self._make_mock_session(users=[user])
 
         with (

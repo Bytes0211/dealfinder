@@ -119,7 +119,6 @@ class SavedFeed(BaseModel):
         title: Product title extracted by Bedrock.
         url: Product URL.
         current_price: Current price string at time of search (e.g. "$279.99").
-        min_discount: Minimum discount percentage to trigger a notification.
         quality_score: Bedrock deal quality score 0–10.
         quality_reason: Brief explanation of the quality score.
         saved_at: ISO timestamp when the feed was saved.
@@ -130,7 +129,6 @@ class SavedFeed(BaseModel):
     title: str
     url: str
     current_price: Optional[str] = None
-    min_discount: int = 0
     quality_score: Optional[float] = None
     quality_reason: Optional[str] = None
     saved_at: str

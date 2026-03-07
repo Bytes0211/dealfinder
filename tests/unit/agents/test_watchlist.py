@@ -75,7 +75,6 @@ async def user_with_feeds(session) -> User:
                     "query": "Sony headphones",
                     "title": "Sony WH-1000XM5",
                     "url": "https://example.com/sony",
-                    "min_discount": 0,
                     "saved_at": "2026-03-06T00:00:00Z",
                 },
                 {
@@ -83,7 +82,6 @@ async def user_with_feeds(session) -> User:
                     "query": "mechanical keyboard",
                     "title": "Mechanical Keyboard",
                     "url": "https://example.com/kb",
-                    "min_discount": 10,
                     "saved_at": "2026-03-06T00:00:00Z",
                 },
             ]

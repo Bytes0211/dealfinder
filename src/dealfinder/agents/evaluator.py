@@ -241,8 +241,7 @@ class EvaluatorAgent:
         """Enqueue notifications for users whose watchlist feeds match this deal.
 
         Scans all active users' ``notification_preferences.saved_feeds`` for
-        entries whose ``query`` keywords appear in the deal title AND whose
-        ``min_discount`` threshold is met.  All matching ``{user_id, feed_id,
+        entries whose ``query`` keywords appear in the deal title.  All matching ``{user_id, feed_id,
         feed_name}`` pairs are recorded; a single deal-notification SQS message
         is enqueued if at least one user matched.  The full list of matched pairs
         is returned so ``PipelineSummaryAgent`` can identify which feeds produced
@@ -277,19 +276,16 @@ class EvaluatorAgent:
             saved_feeds: list[dict] = prefs.get("saved_feeds", []) or []
             for feed in saved_feeds:
                 query_str = feed.get("query", "").strip().lower()
-                min_discount = float(feed.get("min_discount", 0))
                 if not query_str:
                     continue
                 keywords = [w for w in query_str.split() if len(w) > 2][:3]
                 if any(kw in deal_title_lower for kw in keywords):
-                    if float(discount) >= min_discount:
-                        matched_feed_pairs.append({
-                            "user_id": str(user.id),
-                            "feed_id": feed.get("id", ""),
-                            "feed_name": feed.get("query", ""),
-                        })
-                        notified_user_ids.add(str(user.id))
-                        # Continue to collect all matching feeds for this user
+                    matched_feed_pairs.append({
+                        "user_id": str(user.id),
+                        "feed_id": feed.get("id", ""),
+                        "feed_name": feed.get("query", ""),
+                    })
+                    notified_user_ids.add(str(user.id))
 
         if not notified_user_ids:
             return []

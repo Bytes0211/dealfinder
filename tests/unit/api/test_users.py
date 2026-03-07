@@ -170,7 +170,6 @@ class TestUpdateUserPreferences:
                     "title": "Sony WH-1000XM5",
                     "url": "https://example.com/sony",
                     "current_price": "$249.99",
-                    "min_discount": 20,
                     "quality_score": 8.5,
                     "quality_reason": "Strong brand, good discount",
                     "saved_at": "2026-03-06T04:00:00Z",
@@ -187,7 +186,6 @@ class TestUpdateUserPreferences:
         feeds = body["notification_preferences"]["saved_feeds"]
         assert len(feeds) == 1
         assert feeds[0]["title"] == "Sony WH-1000XM5"
-        assert feeds[0]["min_discount"] == 20
 
 
 

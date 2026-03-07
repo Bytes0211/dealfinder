@@ -311,8 +311,7 @@ async def watchlist_matches(
 
     For each saved feed entry, keywords from the feed's ``query`` field are
     matched against deal titles using case-insensitive substring search.
-    Results are filtered by the feed's ``min_discount`` threshold, deduplicated,
-    and sorted by discovery date descending.
+    Results are deduplicated and sorted by discovery date descending.
 
     Args:
         user_id: UUID of the user whose watchlist to match against.
@@ -346,7 +345,6 @@ async def watchlist_matches(
 
     # Build OR filter: one ILIKE condition per feed query keyword
     ilike_conditions = []
-    min_discounts: list[float] = []
     for feed in saved_feeds:
         query_str = feed.get("query", "").strip()
         if query_str:
@@ -354,31 +352,19 @@ async def watchlist_matches(
             keywords = [w for w in query_str.split() if len(w) > 2][:3]
             for kw in keywords:
                 ilike_conditions.append(Deal.title.ilike(f"%{kw}%"))
-            min_discounts.append(float(feed.get("min_discount", 0)))
 
     if not ilike_conditions:
         return DealListResponse(items=[], total=0, limit=limit, offset=offset)
 
-    min_discount_overall = min(min_discounts) if min_discounts else 0
-
-    # When min_discount is 0 include deals with NULL discount_percentage (not yet
-    # evaluated by Bedrock). NULL >= 0 is NULL (falsy) in SQL, which would silently
-    # drop unevaluated deals even though the user wants any match.
-    discount_filter = (
-        or_(Deal.discount_percentage.is_(None), Deal.discount_percentage >= min_discount_overall)
-        if min_discount_overall == 0
-        else Deal.discount_percentage >= min_discount_overall
-    )
-
     base_query = (
         select(Deal)
         .options(selectinload(Deal.source))
-        .where(or_(*ilike_conditions), discount_filter)
+        .where(or_(*ilike_conditions))
     )
     count_query = (
         select(func.count())
         .select_from(Deal)
-        .where(or_(*ilike_conditions), discount_filter)
+        .where(or_(*ilike_conditions))
     )
 
     total_result = await db.execute(count_query)
