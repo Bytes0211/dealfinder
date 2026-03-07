@@ -262,10 +262,16 @@ resource "aws_iam_role_policy" "watchlist_inline" {
         Resource = "${aws_cloudwatch_log_group.watchlist.arn}:*"
       },
       {
-        Sid      = "Bedrock"
-        Effect   = "Allow"
-        Action   = ["bedrock:InvokeModel"]
-        Resource = "arn:aws:bedrock:${var.aws_region}::foundation-model/${var.bedrock_model_id}"
+        Sid    = "Bedrock"
+        Effect = "Allow"
+        Action = ["bedrock:InvokeModel"]
+        # Two ARN patterns required for cross-region inference profiles:
+        # 1. foundation-model — the underlying model(s) invoked across regions
+        # 2. inference-profile — the system-defined profile itself (account-scoped ARN)
+        Resource = [
+          "arn:aws:bedrock:*::foundation-model/*",
+          "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/*",
+        ]
       },
       {
         Sid      = "SecretsManager"
@@ -307,10 +313,13 @@ resource "aws_iam_role_policy" "evaluator_inline" {
         Resource = "${aws_cloudwatch_log_group.evaluator.arn}:*"
       },
       {
-        Sid      = "Bedrock"
-        Effect   = "Allow"
-        Action   = ["bedrock:InvokeModel"]
-        Resource = "arn:aws:bedrock:${var.aws_region}::foundation-model/${var.bedrock_model_id}"
+        Sid    = "Bedrock"
+        Effect = "Allow"
+        Action = ["bedrock:InvokeModel"]
+        Resource = [
+          "arn:aws:bedrock:*::foundation-model/*",
+          "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/*",
+        ]
       },
       {
         Sid    = "DynamoDB"

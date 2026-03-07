@@ -1980,3 +1980,190 @@ indentation bugs in Python are easy to introduce and the tests catch them fast.
 
 **Session End:** March 6, 2026 19:55 UTC
 **Status:** ✅ Per-feed no-deals notifications live in production
+
+---
+
+## Session 11: Phase 7 — WatchlistAgent + Bedrock Trend Analysis (March 7, 2026)
+
+**Date:** March 7, 2026  
+**Time:** ~00:00 – 02:34 UTC  
+**Duration:** ~2.5 hours  
+**Phase:** Phase 7 — WatchlistAgent: Scheduled Agentic Deal Discovery + Trend Enrichment  
+**Branch:** `feature/watchlist-agent` → merged to `main`  
+**Status:** 🚧 DEPLOYED — two production bugs pending fix
+
+### Objective
+
+Replace the passive RSS-based deal discovery model with a proactive `WatchlistAgent` Lambda that runs on a 30-minute EventBridge schedule. For each unique query across all users' saved watchlist feeds, it calls Tavily web search, enriches results with Bedrock (Claude) trend analysis, and persists new deals to Aurora. Extend the Feed page to render Bedrock trend signals alongside matched deals.
+
+---
+
+### Actions Taken
+
+#### 1. BedrockSearchExtractor — `include_trends` Flag
+
+**File:** `src/dealfinder/agents/bedrock.py`
+
+Added `include_trends: bool = False` parameter to `extract()`. When `True`, `_build_extraction_prompt()` appends 8 additional trend fields to the Bedrock JSON schema:
+
+- `trend` (upward / downward / stable)
+- `trend_confidence` (0–1 float)
+- `price_trend` (free-text)
+- `discount_frequency` (free-text)
+- `stockouts_last_30_days` (free-text)
+- `review_velocity` (free-text)
+- `competitor_activity` (free-text)
+- `trend_summary` (plain-language summary)
+
+The flag is opt-in so the existing `/api/v1/search` endpoint is unaffected.
+
+---
+
+#### 2. WatchlistAgent Lambda (`src/dealfinder/agents/watchlist.py`)
+
+New ~300-line file. Core flow:
+
+1. Load all active users via `UserRepository`; collect unique `saved_feeds` queries.
+2. For each query: call Tavily (`max_results=10`), pass results to `BedrockSearchExtractor(include_trends=True)`.
+3. Deduplicate deals by `sha256(url)` stored as `external_id`.
+4. Persist new `Deal` rows with `status=DealStatus.EVALUATED`, `is_high_value=(quality_score >= 7.0)`, `raw_data=enriched_result`.
+5. Create `DealSource` with `url=watchlist://<normalized_query>` to distinguish from RSS sources.
+
+---
+
+#### 3. Migration 006 — Deactivate Product-URL Sources
+
+**File:** `src/dealfinder/db/alembic/versions/20260306_0003_006_deactivate_product_url_sources.py`
+
+```sql
+UPDATE deal_sources SET is_active = FALSE WHERE url LIKE 'http%';
+```
+
+Deactivates all legacy HTTP/HTTPS deal sources so the Feed page's "Matched Deals" section reflects only WatchlistAgent-discovered content. Downgrade is a no-op.
+
+---
+
+#### 4. API — Trend Fields on DealResponse
+
+**Files:** `src/dealfinder/api/schemas.py`, `src/dealfinder/api/routes/users.py`
+
+Added 8 optional trend fields to `DealResponse`. The `watchlist_matches` route populates them from `deal.raw_data.get(field)` for WatchlistAgent deals; non-WatchlistAgent deals return `null` for all trend fields.
+
+---
+
+#### 5. Frontend — Trend Components
+
+**Files:** `frontend/src/api/types.ts`, `frontend/src/pages/FeedPage.tsx`, `frontend/src/index.css`
+
+- Added 8 optional trend fields to the `DealResponse` TypeScript interface.
+- `TrendBadge` — directional icon (↑ ↓ →), label, and confidence percentage pill.
+- `TrendSignals` — compact chip row: price trend, discount frequency, review velocity, competitor activity.
+- `.match-card` wrapper renders a `DealCard` with a `.match-card-trend` footer section when trend data is present.
+- Fixed a bug: `TrendSignals` JSDoc comment was missing the closing `*/`, causing the entire function declaration to be eaten by the parser. Also restored the missing parameter list `({ deal }: { deal: DealResponse })` that was dropped in the same corruption.
+
+---
+
+#### 6. Terraform — Watchlist Lambda + EventBridge
+
+**File:** `infrastructure/modules/pipeline/main.tf`
+
+Added:
+- `aws_cloudwatch_log_group.watchlist`
+- `aws_iam_role.watchlist` + inline policy (CloudWatch Logs, `bedrock:InvokeModel`, `secretsmanager:GetSecretValue`)
+- `aws_lambda_function.watchlist` (handler: `dealfinder.agents.watchlist.handler`)
+- `aws_cloudwatch_event_rule.watchlist_schedule` (`rate(30 minutes)`)
+- `aws_cloudwatch_event_target.watchlist_schedule` + `aws_lambda_permission.watchlist_eventbridge`
+
+Added 3 new variables: `tavily_api_key`, `enable_watchlist_schedule` (default `false`), `watchlist_schedule_expression` (default `rate(30 minutes)`).
+
+Dev environment wired: `enable_watchlist_schedule = true`.
+
+---
+
+#### 7. Deploy Script Update
+
+**File:** `scripts/deploy-lambda.sh`
+
+Added `watchlist` to the default function list so it is included in every full deploy.
+
+---
+
+#### 8. Tests
+
+- `tests/unit/agents/test_watchlist.py` — new file, 7 tests across `TestHelpers`, `TestWatchlistAgentNoUsers`, `TestWatchlistAgentNoFeeds`, `TestWatchlistAgentSearchQuery`, `TestWatchlistAgentHandler`.
+- `tests/unit/agents/test_bedrock.py` — added `TestBedrockSearchExtractorPrompt` (2 tests: `include_trends=False` omits trend fields; `include_trends=True` includes them).
+- **Result:** 357 passed, 41 skipped — all green.
+
+---
+
+#### 9. Frontend Build Fix (JSDoc corruption)
+
+`TrendSignals` was not compiling. The JSDoc comment `/** Compact trend signals row` lacked a closing `*/`, causing the TypeScript parser to consume the next `*/` in a JSX comment on line 102, eating the entire function body. The parameter list `({ deal }: { deal: DealResponse }) {` was also missing. Both fixed; `npm run build` clean.
+
+---
+
+#### 10. Deployment
+
+- PR created, merged to `main`.
+- Terraform applied: watchlist Lambda, IAM, EventBridge rule created.
+- GitHub Actions deployed all 6 Lambdas + frontend.
+- Migration 006 run via `./scripts/run-migrations-lambda.sh prod` — ✅ applied.
+- EventBridge rule: `ENABLED` (`rate(30 minutes)`).
+
+---
+
+### Production Issues Found (Pending Fix)
+
+#### Issue 1 — Bedrock Model Marked Legacy
+
+**Log error:**
+```
+BedrockSearchExtractor API error [ResourceNotFoundException]: Access denied.
+This Model is marked by provider as Legacy and you have not been actively
+using the model in the last 15 days.
+```
+
+**Root cause:** `DEALFINDER_BEDROCK_MODEL_ID` on the watchlist Lambda (and all pipeline Lambdas) is set to `anthropic.claude-3-sonnet-20240229-v1:0`, which AWS Bedrock has now flagged as Legacy. The model has been inactive for more than 15 days and access was revoked.
+
+**Fix required:** Update `var.bedrock_model_id` default in `infrastructure/modules/pipeline/variables.tf` to an active model (e.g. `anthropic.claude-3-5-haiku-20241022-v1:0`), update `infrastructure/modules/pipeline/variables.tf` default, and update the Lambda env var directly via `aws lambda update-function-configuration` for immediate effect while the Terraform change is staged.
+
+---
+
+#### Issue 2 — SQLEnum DealStatus Sends Uppercase Names to PostgreSQL
+
+**Log error:**
+```
+invalid input value for enum dealstatus: "EVALUATED"
+(sqlalchemy.dialects.postgresql.asyncpg.Error)
+```
+
+**Root cause:** `SQLEnum(DealStatus)` in `src/dealfinder/db/models.py` uses the Python enum **name** (`EVALUATED`) for PostgreSQL native enum storage rather than the **value** (`evaluated`). The `dealstatus` type in the DB was created by migration 001 with lowercase values. The WatchlistAgent is the first code path to INSERT a new deal with a non-DISCOVERED status (all other agents either INSERT with `DISCOVERED` implicitly or UPDATE via `repo.update_status`). This reveals a latent bug that would also affect the scanner on fresh inserts — it was silently swallowing the exception.
+
+**Fix required:** Add `values_callable=lambda obj: [e.value for e in obj]` to `SQLEnum(DealStatus)` in `models.py` to force value-based storage, then redeploy all Lambdas.
+
+---
+
+### Validation
+
+- ✅ `uv run pytest tests/ -v` — 357 passed, 41 skipped
+- ✅ `npm run build` — clean TypeScript compile
+- ✅ EventBridge rule ENABLED, Lambda ACTIVE
+- ✅ Migration 006 applied
+- 🚧 WatchlistAgent invocations failing due to Issues 1 & 2 above
+
+---
+
+### Lessons Learned
+
+1. **AWS Bedrock Legacy model access** — Bedrock revokes access to models not used in the past 15 days. Production systems need to pin to actively supported model IDs; check [Bedrock model availability](https://docs.aws.amazon.com/bedrock/latest/userguide/models-supported.html) before deploying.
+
+2. **SQLAlchemy `SQLEnum` uses names, not values, for native PostgreSQL enums** — For PostgreSQL native enum columns, `SQLEnum(PythonEnum)` uses the Python enum `.name` attribute (uppercase) by default. Always specify `values_callable=lambda obj: [e.value for e in obj]` to store the lowercase value. This bug was hidden by the scanner silently catching the exception on every deal insert.
+
+3. **Silent exception swallowing masks schema bugs** — The scanner has `except Exception: logger.warning(...)` around every deal insert. The SQLEnum issue would have prevented ALL deal inserts from the scanner, but no alarm fired because the function returned success with `deals_discovered=0`.
+
+4. **Unclosed JSDoc `/**` comments consume JSX** — A `/**` without `*/` in a `.tsx` file silently eats everything until the next `*/`, which in JSX is often inside a `{/* comment */}`. TypeScript parser errors are then reported far from the actual source of the problem.
+
+---
+
+**Session End:** March 7, 2026 02:34 UTC  
+**Status:** 🚧 Phase 7 deployed — two production bugs (Bedrock model + SQLEnum) pending fix before WatchlistAgent produces deals

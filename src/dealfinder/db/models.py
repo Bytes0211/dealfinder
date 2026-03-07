@@ -125,7 +125,8 @@ class Deal(Base):
     
     # Status and processing
     status: Mapped[DealStatus] = mapped_column(
-        SQLEnum(DealStatus), default=DealStatus.DISCOVERED
+        SQLEnum(DealStatus, values_callable=lambda obj: [e.value for e in obj]),
+        default=DealStatus.DISCOVERED,
     )
     confidence_score: Mapped[Optional[Decimal]] = mapped_column(Numeric(4, 3))
     is_high_value: Mapped[bool] = mapped_column(Boolean, default=False)

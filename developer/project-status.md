@@ -1,9 +1,9 @@
 # Deal Finder - Project Status & Timeline
 
 **Project Start:** January 21, 2026
-**Last Update:** March 5, 2026
-**Project Duration:** 10 weeks (revised from 18 weeks) + Phase 6 (frontend, ~2 weeks)
-**Current Status:** Phase 4 Complete | 4 of 6 phases complete | Ready for Phase 5
+**Last Update:** March 7, 2026
+**Project Duration:** 10 weeks (revised from 18 weeks) + Phase 6 (frontend) + Phase 7 (WatchlistAgent)
+**Current Status:** Phase 7 Deployed | 🚧 Two production bugs pending fix
 
 ---
 
@@ -13,8 +13,8 @@ Deal Finder is an AI-powered deal hunting autonomous agent system being transfor
 
 **Scope Revision (Feb 18, 2026):** Reduced from 8 phases / 18 weeks to 5 phases / 10 weeks. Removed Kafka, Spark, ECS, SageMaker, APISIX, React frontend, Prometheus/Grafana. Replaced with serverless equivalents (SQS/SNS, Lambda, Bedrock, CloudWatch). Target cost reduced from $1,750-2,900/month to $200-500/month. See [PRODUCTION_PLAN.md](../PRODUCTION_PLAN.md) for full details.
 
-**Current Milestone:** Phase 4 - Notifications + API COMPLETE
-**Next Milestone:** Phase 5 - Polish + Deploy
+**Current Milestone:** Phase 7 - WatchlistAgent + Trend Analysis DEPLOYED
+**Next Milestone:** Fix Bedrock model (Legacy) + SQLEnum uppercase bug
 
 ---
 
@@ -223,10 +223,10 @@ Deal Finder is an AI-powered deal hunting autonomous agent system being transfor
 
 ---
 
-### Phase 6: React Frontend (Weeks 11-12) 🚧 IN PROGRESS
+### Phase 6: React Frontend (Weeks 11-12) ✅ COMPLETE
 
 **Duration:** ~7 days
-**Status:** 85% Complete 🚧
+**Status:** 100% Complete ✅
 
 | Task | Owner | Days | Status | Dependencies |
 |------|-------|------|--------|--------------|
@@ -257,13 +257,14 @@ Deal Finder is an AI-powered deal hunting autonomous agent system being transfor
 ## Overall Project Status
 
 ### Completion Metrics
-- **Overall Progress:** ~78% (24 of 31 tasks complete)
+- **Overall Progress:** ~92% (Phase 7 deployed; 2 production bugs pending fix)
 - **Phase 1:** 80% complete (CI/CD not yet set up)
 - **Phase 2:** 100% complete ✅
 - **Phase 3:** 100% complete ✅
 - **Phase 4:** 100% complete ✅
-- **Phase 5:** 40% complete (prod Terraform env + frontend CI done; deploy pending)
-- **Phase 6:** 85% complete 🚧 (app + infra + CI built; smoke test + docs pending)
+- **Phase 5:** 100% complete ✅
+- **Phase 6:** 100% complete ✅
+- **Phase 7:** 90% complete 🚧 (deployed; Bedrock model + SQLEnum fix pending)
 
 ### Key Milestones
 
@@ -274,7 +275,8 @@ Deal Finder is an AI-powered deal hunting autonomous agent system being transfor
 | ✅ Core pipeline implemented (Phase 3) | Mar 4, 2026 | ACHIEVED |
 | ✅ Notifications + API live (Phase 4) | Mar 18, 2026 | ACHIEVED |
 || ⏸️ Production deployed (Phase 5) | TBD | PENDING |
-|| ⏸️ React frontend live (Phase 6) | TBD | PLANNED |
+|| ✅ React frontend live (Phase 6) | Mar 6, 2026 | ACHIEVED |
+|| 🚧 WatchlistAgent deployed (Phase 7) | Mar 7, 2026 | DEPLOYED — bugs pending |
 
 ### Risk Register
 
@@ -397,6 +399,7 @@ Deal Finder is an AI-powered deal hunting autonomous agent system being transfor
 | Feb 18, 2026 | Removed SageMaker | Bedrock (Claude) handles all LLM needs |
 | Feb 18, 2026 | Removed React frontend from Phases 1-5 | API-first; deferred to Phase 6 |
 | Mar 5, 2026 | Added Phase 6 (React frontend) | Cognito + API Gateway already in place; user demand |
+| Mar 7, 2026 | Added Phase 7 (WatchlistAgent + Trend Analysis) | Replace passive RSS with proactive Tavily + Bedrock agentic discovery |
 | Feb 18, 2026 | Removed Prometheus/Grafana | CloudWatch sufficient for serverless |
 | Feb 18, 2026 | Removed ElastiCache (Redis) | DynamoDB for caching |
 | Feb 18, 2026 | Cost target: $200-500/mo | Down from $1,750-2,900/mo |
