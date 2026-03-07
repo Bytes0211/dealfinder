@@ -53,6 +53,14 @@ export function FeedPage() {
   // Matched deals pagination
   const [matchOffset, setMatchOffset] = useState(0);
 
+  // Per-feed filter — null means show all
+  const [activeFeedId, setActiveFeedId] = useState<string | null>(null);
+
+  function toggleFeedFilter(feedId: string) {
+    setActiveFeedId((prev) => (prev === feedId ? null : feedId));
+    setMatchOffset(0);
+  }
+
   const { data: userPrefs } = useUserPreferences(authed ? userId : '');
   const { mutate: savePrefs } = useUpdatePreferences(userId);
 
@@ -83,8 +91,18 @@ export function FeedPage() {
 
   function removeFeed(feed: SavedFeed) {
     const updated = savedFeeds.filter((f) => f.id !== feed.id);
+    if (activeFeedId === feed.id) setActiveFeedId(null);
     savePrefs({ saved_feeds: updated });
   }
+
+  // Client-side filter — mirrors the backend ILIKE keyword logic
+  const activeFeed = savedFeeds.find((f) => f.id === activeFeedId) ?? null;
+  const visibleDeals = activeFeed && matchData
+    ? matchData.items.filter((deal) => {
+        const keywords = activeFeed.query.toLowerCase().split(' ').filter((w) => w.length > 2).slice(0, 3);
+        return keywords.some((kw) => deal.title.toLowerCase().includes(kw));
+      })
+    : (matchData?.items ?? []);
 
   // ── Render ───────────────────────────────────────────
 
@@ -100,7 +118,7 @@ export function FeedPage() {
   return (
     <div className="page">
       {/* ──────────── Section A: Watchlist ──────────── */}
-      <section className="feed-section">
+      <section className="feed-section feed-watchlist-col">
         <div className="feed-section-header">
           <h2>My Watchlist</h2>
           <Link to="/search" className="btn btn-outline btn-sm">+ New Search</Link>
@@ -164,11 +182,20 @@ export function FeedPage() {
                       <span className="watchlist-discount-badge">
                         ≥{feed.min_discount}%&nbsp;off
                       </span>
-                      <button
+                  <button
                         onClick={() => startEdit(feed)}
                         className="btn btn-outline btn-sm"
                       >
                         Edit
+                      </button>
+                      <button
+                        onClick={() => toggleFeedFilter(feed.id)}
+                        className={`btn btn-sm ${
+                          activeFeedId === feed.id ? 'btn-filter-active' : 'btn-filter'
+                        }`}
+                        title={activeFeedId === feed.id ? 'Clear filter' : 'Filter deals to this item'}
+                      >
+                        {activeFeedId === feed.id ? '⊗ Filtered' : '⊕ Filter'}
                       </button>
                     </>
                   )}
@@ -189,9 +216,19 @@ export function FeedPage() {
       {/* ──────────── Section B: Matched Deals ──────────── */}
       {savedFeeds.length > 0 && (
         <section className="feed-section">
-          <h2>Matched Deals</h2>
+          <div className="feed-section-header">
+            <h2>Matched Deals</h2>
+            {activeFeed && (
+              <span className="feed-filter-pill">
+                {activeFeed.title}
+                <button onClick={() => setActiveFeedId(null)} className="feed-filter-pill-clear" title="Clear filter">×</button>
+              </span>
+            )}
+          </div>
           <p className="section-subtitle">
-            Deals discovered for your watchlist queries, enriched with Bedrock trend analysis.
+            {activeFeed
+              ? `Showing deals for "${activeFeed.query}"`
+              : 'Deals discovered for your watchlist queries, enriched with Bedrock trend analysis.'}
           </p>
 
           {matchLoading && <p className="state-msg state-msg--left">Loading matches…</p>}
@@ -209,9 +246,11 @@ export function FeedPage() {
                 </p>
               ) : (
                 <>
-                  <p className="result-count">{matchData.total} matched deals</p>
+                  <p className="result-count">
+                    {activeFeed ? `${visibleDeals.length} of ${matchData.total}` : matchData.total} matched deals
+                  </p>
                 <div className="deal-grid">
-                    {matchData.items.map((deal) => (
+                    {visibleDeals.map((deal) => (
                       <div key={deal.id} className="match-card">
                         <DealCard deal={deal} />
                         {deal.trend && (

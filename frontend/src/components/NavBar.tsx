@@ -15,7 +15,7 @@ export function NavBar() {
         Deal Finder
       </Link>
       <div className="navbar-links">
-        <Link to="/" className={pathname === '/' ? 'active' : ''}>Feed</Link>
+        <Link to="/" className={pathname === '/' ? 'active' : ''}>Matched Deals</Link>
         <Link to="/search" className={pathname === '/search' ? 'active' : ''}>Search</Link>
         <Link to="/top" className={pathname === '/top' ? 'active' : ''}>Top Deals</Link>
         {authed && (

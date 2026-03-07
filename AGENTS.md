@@ -8,6 +8,8 @@ Deal Finder is an AI-powered deal hunting system that discovers deals via RSS fe
 
 **Status:** Phase 7 complete and live in production. WatchlistAgent Lambda runs on a 30-minute EventBridge schedule, proactively discovering deals via Tavily search + Bedrock (Claude 3 Haiku) enrichment. SQLEnum casing bug and Bedrock Legacy model bug fixed (Session 12). Bedrock IAM policies updated to support cross-region inference profiles.
 
+**Frontend (Session 13):** "Matched Deals" feed page (renamed from Feed) supports per-watchlist-entry filter toggle (client-side keyword filtering), scrollable deal grid with sticky watchlist section, and consistent page spacing across all pages.
+
 **Current Bedrock model:** `anthropic.claude-3-haiku-20240307-v1:0` (on-demand, agreement accepted)
 **Upgrade path:** Accept Claude 3.5 Haiku agreement in Bedrock console → switch to `us.anthropic.claude-3-5-haiku-20241022-v1:0`
 
