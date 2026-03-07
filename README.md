@@ -6,26 +6,32 @@ An intelligent multi-agent system that discovers online deals through RSS feeds,
 
 ## Project Status
 
-**Current Phase:** Phase 4 Complete — Notifications + API Implemented | Ready for Phase 5
+**Current Phase:** Phase 7 Complete — WatchlistAgent + React Frontend Live in Production
 
-**Scope:** 5 phases / 10 weeks | Serverless-first | Target cost: $200-500/month
+**Scope:** 7 phases | Serverless-first | Target cost: $200-500/month
 
 See [developer/project-status.md](developer/project-status.md) for detailed tracking.
 
 ## Architecture
 
 ```
-RSS Feeds → Lambda (Scanner) → Step Functions → Lambda (Evaluator) → SNS → Pushover/Email
+RSS Feeds → Lambda (Scanner) → Step Functions → Lambda (Evaluator) → SNS → SMS/Email
                                                       ↕
                                                 Aurora + OpenSearch
                                                       ↕
                                                 Bedrock (Claude)
+
+Tavily → Lambda (WatchlistAgent, scheduled 30min) → Bedrock → Aurora
+
+React SPA (CloudFront) → API Gateway → Lambda (FastAPI/Mangum) → Aurora
 ```
 
 ### Agent Architecture
 - **ScannerAgent**: Scrapes RSS feeds for deals (Lambda)
 - **EvaluatorAgent**: Estimates prices via Bedrock, calculates discounts (Lambda)
-- **MessengerAgent**: Generates personalized notifications using Claude, dispatches via SNS (Lambda)
+- **PipelineSummaryAgent**: Aggregates per-feed match results, enqueues no-deals notifications (Lambda)
+- **MessengerAgent**: Generates personalized notifications using Claude, dispatches via SNS/SES (Lambda)
+- **WatchlistAgent**: Scheduled (30-min EventBridge) proactive deal discovery via Tavily + Bedrock trend enrichment (Lambda)
 
 ### Orchestration
 AWS Step Functions coordinates the pipeline:
@@ -42,9 +48,14 @@ EventBridge (schedule) → Scanner → Evaluate → Decide (discount > threshold
 
 ### Backend
 - **Language:** Python 3.12
-- **API Framework:** FastAPI with Pydantic
+- **API Framework:** FastAPI + Mangum (Lambda adapter)
 - **Compute:** AWS Lambda + Step Functions
 - **Package Manager:** uv
+
+### Frontend
+- **Framework:** React 19 + Vite + TypeScript
+- **Auth:** AWS Cognito Hosted UI
+- **Hosting:** S3 + CloudFront
 
 ### Data Layer
 - **Relational DB:** AWS Aurora PostgreSQL Serverless v2
@@ -54,7 +65,8 @@ EventBridge (schedule) → Scanner → Evaluate → Decide (discount > threshold
 - **Messaging:** SQS (queues + DLQ), SNS (fan-out)
 
 ### AI
-- **LLM:** AWS Bedrock (Claude) for price estimation and notification crafting
+- **LLM:** AWS Bedrock (Claude 3 Haiku) for price estimation, notification crafting, and deal trend enrichment
+- **Search:** Tavily API for proactive watchlist deal discovery
 
 ### Infrastructure
 - **IaC:** Terraform (remote state in S3 + DynamoDB locking)
@@ -72,6 +84,14 @@ dealfinder/
 ├── developer/
 │   ├── developer_journal.md       # Development session logs
 │   └── project-status.md          # Project timeline and status
+├── frontend/                      # React 19 + Vite + TypeScript SPA
+│   ├── src/
+│   │   ├── api/                   # axios client + typed API wrappers
+│   │   ├── auth/                  # Cognito Hosted UI helpers + JWT decode
+│   │   ├── components/            # NavBar, DealCard, Pagination, ProtectedRoute
+│   │   ├── hooks/                 # TanStack Query hooks
+│   │   └── pages/                 # FeedPage, SearchPage, TopDealsPage, PreferencesPage
+│   └── dist/                      # Vite build output (deployed to S3/CloudFront)
 ├── infrastructure/                # Terraform IaC
 │   ├── bootstrap.sh               # Backend setup script (one-time)
 │   ├── environments/dev/          # Dev environment (deployed)
@@ -80,30 +100,33 @@ dealfinder/
 │       ├── data/                  # S3, DynamoDB, Aurora, OpenSearch
 │       ├── monitoring/            # CloudWatch logs, alarms, dashboard
 │       ├── pipeline/              # SQS, Lambda, Step Functions, EventBridge
-│       ├── notifications/         # SNS, Messenger Lambda, IAM (Phase 4)
-│       └── api/                   # API Lambda, API Gateway, Cognito (Phase 4)
+│       ├── notifications/         # SNS, Messenger Lambda, IAM
+│       ├── api/                   # API Lambda, API Gateway, Cognito
+│       └── frontend/              # S3 + CloudFront static site, OAC
 ├── src/dealfinder/                # Python package
 │   ├── agents/
 │   │   ├── config.py              # AgentConfig (pydantic-settings)
-│   │   ├── bedrock.py             # BedrockPriceEstimator + PriceEstimationResult
+│   │   ├── bedrock.py             # BedrockPriceEstimator, BedrockSearchExtractor
 │   │   ├── scanner.py             # ScannerAgent Lambda + handler()
 │   │   ├── evaluator.py           # EvaluatorAgent Lambda + handler()
-│   │   └── messenger.py           # MessengerAgent Lambda + handler() (Phase 4)
-│   ├── notifications/             # Notification clients (Phase 4)
-│   │   ├── pushover.py            # PushoverClient (httpx)
+│   │   ├── pipeline_summary.py    # PipelineSummaryAgent Lambda + handler()
+│   │   ├── messenger.py           # MessengerAgent Lambda + handler()
+│   │   └── watchlist.py           # WatchlistAgent Lambda + handler() (Phase 7)
+│   ├── notifications/
 │   │   └── ses.py                 # SesClient (boto3 SES v2)
-│   ├── api/                       # FastAPI REST API (Phase 4)
+│   ├── api/                       # FastAPI REST API
 │   │   ├── main.py                # FastAPI app + Mangum handler
 │   │   ├── schemas.py             # Pydantic request/response models
 │   │   ├── deps.py                # DB session + Cognito auth dependencies
 │   │   └── routes/
 │   │       ├── health.py          # GET /api/v1/health
 │   │       ├── deals.py           # GET /api/v1/deals, /top, /{id}
-│   │       └── users.py           # POST /api/v1/users, PUT preferences
+│   │       ├── users.py           # POST /api/v1/users, preferences, watchlist
+│   │       └── search.py          # POST /api/v1/search — Tavily + Bedrock
 │   ├── db/
 │   │   ├── models.py              # SQLAlchemy ORM models (5 models, 3 enums)
 │   │   ├── connection.py          # Async engine and session management
-│   │   └── alembic/               # Database migrations
+│   │   └── alembic/               # Database migrations (006 applied)
 │   ├── data/
 │   │   └── repository.py          # Repository pattern (5 repository classes)
 │   └── search/
@@ -112,9 +135,9 @@ dealfinder/
 │       └── index.py               # Index management and mappings
 ├── tests/
 │   ├── unit/
-│   │   ├── agents/                # Agent unit tests (58 tests)
-│   │   ├── notifications/         # PushoverClient + SesClient tests (Phase 4)
-│   │   ├── api/                   # FastAPI endpoint tests (Phase 4)
+│   │   ├── agents/                # Agent unit tests (357 pass)
+│   │   ├── notifications/         # SesClient tests
+│   │   ├── api/                   # FastAPI endpoint tests
 │   │   ├── db/                    # ORM model tests
 │   │   ├── data/                  # Repository tests
 │   │   └── search/                # OpenSearch/embedding tests
@@ -189,35 +212,50 @@ Feature flags keep idle dev costs at ~$4-10/month:
 
 ## Roadmap
 
-### Phase 1: Infrastructure Setup (Weeks 1-2) — COMPLETE
+### Phase 1: Infrastructure Setup — COMPLETE
 - Terraform backend, VPC, networking, S3, DynamoDB
 - CloudWatch monitoring (logs, alarms, dashboard, cost anomaly)
 
-### Phase 2: Data Layer (Weeks 3-4) — COMPLETE
+### Phase 2: Data Layer — COMPLETE
 - SQLAlchemy ORM models and Alembic migrations
 - Repository pattern data access layer
 - OpenSearch client with vector search
 - Embedding service with provider abstraction
 
-### Phase 3: Core Pipeline (Weeks 5-7) — COMPLETE
+### Phase 3: Core Pipeline — COMPLETE
 - ScannerAgent Lambda (RSS parsing, SHA-256 dedup, async feedparser)
 - BedrockPriceEstimator (Claude via boto3, async via run_in_executor)
 - EvaluatorAgent Lambda (discount calc, high-value flagging)
 - Step Functions state machine (Scan → Map(Evaluate → IsHighValue?) → Notify)
-- SQS queues + DLQ alarms + EventBridge schedule (disabled by default)
+- SQS queues + DLQ alarms + EventBridge schedule
 
-### Phase 4: Notifications + API (Weeks 8-9) — COMPLETE
+### Phase 4: Notifications + API — COMPLETE
 - MessengerAgent Lambda (SQS batch, DynamoDB dedup, Bedrock message crafting)
-- PushoverClient + SesClient with full error handling
+- SesClient with full error handling
 - SNS topic for deal-notifications fan-out
-- FastAPI REST API (6 endpoints) + Mangum adapter
+- FastAPI REST API + Mangum adapter
 - API Gateway HTTP API v2 + Cognito JWT authorizer
 - Terraform modules: `notifications/` + `api/`
 
-### Phase 5: Polish + Deploy (Week 10) — NEXT
-- Integration tests (end-to-end)
-- Production Terraform environment
-- Production deploy + validation
+### Phase 5: Per-Feed Notifications — COMPLETE
+- PipelineSummaryAgent Lambda (per-feed no-deals 24h dedup)
+- MessengerAgent `notify_no_deals_feed` via SES
+- EvaluatorAgent returns `matched_feed_pairs`
+
+### Phase 6: React Frontend — COMPLETE
+- React 19 + Vite + TypeScript SPA
+- Cognito Hosted UI authentication
+- CloudFront + S3 static hosting (Terraform `frontend/` module)
+- Pages: Matched Deals, Search, Top Deals, Preferences
+
+### Phase 7: WatchlistAgent + Production Fixes — COMPLETE
+- WatchlistAgent Lambda: Tavily search + Bedrock trend enrichment (30-min schedule)
+- `BedrockSearchExtractor` with `include_trends` flag (8 trend fields)
+- Migration 006: deactivate legacy product-URL deal sources
+- Fixed SQLEnum `values_callable` bug (uppercase name vs lowercase value)
+- Updated Bedrock model to `anthropic.claude-3-haiku-20240307-v1:0`
+- Dual-ARN Bedrock IAM policy (foundation-model + inference-profile)
+- Frontend: watchlist feed filter, scrollable deal grid, consistent page spacing
 
 ## Documentation
 
@@ -233,7 +271,7 @@ Feature flags keep idle dev costs at ~$4-10/month:
 The following were removed during the Feb 2026 scope revision to keep the project realistic for a solo developer. See PRODUCTION_PLAN.md "Future Enhancements" for triggers to re-add.
 
 - Kafka/MSK, Spark/EMR, ECS Fargate, SageMaker
-- Apache APISIX, React frontend
+- Apache APISIX
 - Prometheus/Grafana, ElastiCache
 
 ## Security
@@ -253,4 +291,4 @@ The following were removed during the Feb 2026 scope revision to keep the projec
 
 ---
 
-**Built with** AWS Lambda · Step Functions · Bedrock · Aurora · OpenSearch · Terraform
+**Built with** AWS Lambda · Step Functions · Bedrock · Aurora · OpenSearch · Terraform · React · CloudFront

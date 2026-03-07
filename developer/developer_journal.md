@@ -2167,3 +2167,82 @@ invalid input value for enum dealstatus: "EVALUATED"
 
 **Session End:** March 7, 2026 02:34 UTC  
 **Status:** 🚧 Phase 7 deployed — two production bugs (Bedrock model + SQLEnum) pending fix before WatchlistAgent produces deals
+
+---
+
+## Session 13: Frontend UX — Watchlist Feed Filter + CSS Fixes (March 7, 2026)
+
+**Date:** March 7, 2026  
+**Time:** 03:30 – 04:40 UTC  
+**Duration:** ~70 minutes  
+**Phase:** Frontend polish (post Phase 7)  
+**Status:** ✅ COMPLETE
+
+### Objective
+
+Improve the "Matched Deals" feed page UX with a per-feed filter toggle, scrollable deal grid, and fix page spacing inconsistencies that had persisted across Search, Top Deals, and Preferences pages.
+
+---
+
+### Actions Taken
+
+#### 1. Watchlist Feed Filter Toggle (`feature/watchlist-feed-filter`)
+
+**Files:** `frontend/src/pages/FeedPage.tsx`, `frontend/src/components/NavBar.tsx`, `frontend/src/index.css`
+
+- Added `activeFeedId: string | null` state and `toggleFeedFilter()` to `FeedPage`.
+- `visibleDeals` computed via client-side keyword filter: up to 3 keywords (>2 chars) from `activeFeed.query`, matching `deal.title.toLowerCase()` — mirrors backend ILIKE logic.
+- Each watchlist card gets a `⊕ Filter` / `⊗ Filtered` toggle button (`btn-filter` / `btn-filter-active`).
+- Active filter shown as a pill in the "Matched Deals" section header with a × clear button.
+- Deal count label switches to `"N of Total matched deals"` when a filter is active.
+- `removeFeed()` clears `activeFeedId` if the removed feed was the active filter.
+
+#### 2. Stacked Scrollable Layout
+
+- Watchlist section: `feed-watchlist-col` → `position: sticky; top: 4rem; z-index: 10` so it stays visible while deals scroll.
+- Deal grid: `max-height: calc(100vh - 14rem); overflow-y: auto; scrollbar-width: thin` — scrolls independently.
+
+#### 3. Logo Padding + Nav Rename
+
+- `.app-header-icon` top padding increased from `.5rem` → `.75rem`.
+- NavBar link renamed `"Feed"` → `"Matched Deals"`.
+
+---
+
+#### 4. Page Spacing Fix — Leftover Vite Boilerplate CSS (`fix/page-spacing`)
+
+**File:** `frontend/src/index.css`
+
+**Issue:** Search, Top Deals, and Preferences pages had a large gap between the logo and page content, even after the `main-content` padding was reduced. The Matched Deals page was unaffected.
+
+**Root cause:** The bottom of `index.css` contained leftover Vite project scaffold styles (never cleaned up) that were cascading over the custom rules:
+
+- `body { display: flex; place-items: center; min-height: 100vh; }` — vertically centered the entire page layout, adding the appearance of a large top gap.
+- `h1 { font-size: 3.2em; line-height: 1.1; }` — overrode the custom `h1 { font-size: 1.6rem }` rule.
+- Generic `button { background-color: #1a1a1a; ... }` — overrode all button styles.
+- A `@media (prefers-color-scheme: light)` block that reset colors and button backgrounds.
+
+The Matched Deals page was unaffected because `FeedPage` starts with a `<section>` + `<h2>`, not an `<h1>`, so the oversized `h1` override had no visible impact there.
+
+**Fix:** Removed all 54 lines of Vite boilerplate from `index.css`. Also added `margin-top: 0` to the custom `h1` rule to prevent browser-default top margin.
+
+---
+
+### Deployment
+
+- `feature/watchlist-feed-filter` — committed, pushed, merged to `main`.
+- `fix/page-spacing` — committed, pushed to remote; PR open for merge.
+- Both trigger `frontend.yml` → S3 sync + CloudFront invalidation on merge to `main`.
+
+---
+
+### Lessons Learned
+
+1. **Vite scaffold CSS must be cleaned out** — The default `index.css` from `npm create vite` contains opinionated body/h1/button styles designed for the scaffold demo page. These need to be fully removed when building a real app, as they cascade over custom rules. The `body { display: flex; place-items: center }` pattern is particularly subtle — it looks harmless until you notice every page is vertically centered inside the viewport.
+
+2. **Compare affected vs unaffected pages to narrow CSS scope** — When a spacing bug affects some pages but not others, the difference is almost always the first child element (`h1` with margin vs a custom `section`). Checking the first rendered element in each page's return statement immediately reveals the cause.
+
+---
+
+**Session End:** March 7, 2026 04:40 UTC  
+**Status:** ✅ Frontend UX polish complete — feed filter, scrollable layout, spacing consistent across all pages
