@@ -277,7 +277,7 @@ class TestWatchlistAgentSearchQuery:
     async def test_bedrock_fallback_on_extraction_failure(
         self, session: AsyncSession, config: AgentConfig
     ) -> None:
-        """When Bedrock raises, deals should still be persisted using raw Tavily data."""
+        """When Bedrock raises, fallback has no price so deals are skipped."""
         agent = WatchlistAgent(config=config)
         urls = ["https://amazon.com/dp/FALLBACK001"]
         tavily_results = _make_tavily_results(urls)
@@ -290,10 +290,8 @@ class TestWatchlistAgentSearchQuery:
 
             new_deals = await agent.search_query("fallback query", session)
 
-        # Deals are persisted from raw Tavily data (title/url, no quality/trend fields)
-        assert len(new_deals) == 1
-        assert new_deals[0].raw_data.get("trend") is None
-        assert new_deals[0].raw_data.get("quality_score") is None
+        # Fallback results have current_price=None, so all deals are skipped
+        assert len(new_deals) == 0
 
 
 class TestWatchlistAgentHandler:
