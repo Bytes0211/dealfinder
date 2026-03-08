@@ -465,6 +465,8 @@ h1 { font-size: 1.6rem; font-weight: 700; margin-top: 0; }
   border-radius: var(--radius);
   overflow: hidden;
   box-shadow: var(--shadow);
+  outline: 1px solid #bfc5cc;
+  outline-offset: -1px;
 }
 .match-card .deal-card { border: none; border-radius: 0; box-shadow: none; }
 .match-card.match-card--hot { outline: 2px solid #ff6b35; outline-offset: -2px; }
