@@ -314,7 +314,8 @@ class BedrockSearchExtractor:
             "For each result return:\n"
             "- title: Clean product name (remove store names and marketing filler)\n"
             "- url: The product URL exactly as provided\n"
-            "- current_price: Current sale price as a string (e.g. \"$279.99\") or null if not found\n"
+            "- current_price: Current sale price as a string (e.g. \"$279.99\") or null if not found. "
+            "If multiple prices are listed, use the lowest retail price.\n"
             "- quality_score: Float 0.0\u201310.0 rating the deal quality\n"
             "  (10 = exceptional value vs typical retail, 0 = poor value or no deal)\n"
             "  Base this on: price vs known typical retail, brand reputation, discount signals\n"
@@ -400,9 +401,11 @@ class BedrockSearchExtractor:
             return []
 
         prompt = self._build_extraction_prompt(results, include_trends=include_trends)
+        # Trend fields add ~150 tokens per result; 4096 comfortably fits 10 results.
+        max_tokens = 4096 if include_trends else 1024
         body = json.dumps({
             "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 1024,
+            "max_tokens": max_tokens,
             "temperature": 0.1,
             "messages": [{"role": "user", "content": prompt}],
         })

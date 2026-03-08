@@ -164,6 +164,12 @@ class WatchlistAgent:
                         "max_results": 10,
                         "include_answer": False,
                         "include_raw_content": False,
+                        "exclude_domains": [
+                            "youtube.com",
+                            "reddit.com",
+                            "twitter.com",
+                            "facebook.com",
+                        ],
                     },
                 )
                 response.raise_for_status()
@@ -195,7 +201,10 @@ class WatchlistAgent:
 
         source = await self._get_or_create_source(query, session)
 
-        raw_results = await self._call_tavily(query)
+        # Append "buy price" to bias Tavily toward product listing pages
+        # rather than reviews/articles, increasing price extraction rate.
+        search_query = f"{query} buy price"
+        raw_results = await self._call_tavily(search_query)
         if not raw_results:
             await source_repo.update_check_time(source.id, success=False)
             return []
@@ -235,6 +244,8 @@ class WatchlistAgent:
             is_high_value = bool(quality_score is not None and float(quality_score) >= 7.0)
 
             sale_price = _parse_price(result.get("current_price"))
+            if sale_price is None:
+                continue
 
             deal = Deal(
                 source_id=source.id,
