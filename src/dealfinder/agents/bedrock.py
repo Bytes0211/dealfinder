@@ -316,6 +316,7 @@ class BedrockSearchExtractor:
             "- url: The product URL exactly as provided\n"
             "- current_price: Current sale price as a string (e.g. \"$279.99\") or null if not found. "
             "If multiple prices are listed, use the lowest retail price.\n"
+            "- in_stock: true if the product appears to be available/in stock, false if out of stock or unavailable\n"
             "- quality_score: Float 0.0\u201310.0 rating the deal quality\n"
             "  (10 = exceptional value vs typical retail, 0 = poor value or no deal)\n"
             "  Base this on: price vs known typical retail, brand reputation, discount signals\n"
@@ -323,7 +324,7 @@ class BedrockSearchExtractor:
         )
         example = (
             '"title": "...", "url": "...", "current_price": "...", '
-            '"quality_score": 7.5, "quality_reason": "..."'
+            '"in_stock": true, "quality_score": 7.5, "quality_reason": "..."'
         )
 
         if include_trends:

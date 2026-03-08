@@ -186,6 +186,7 @@ h1 { font-size: 1.6rem; font-weight: 700; margin-top: 0; }
   white-space: nowrap;
 }
 .badge--hot { background: var(--c-hot); color: #fff; }
+.badge--oos { background: #f8d7da; color: var(--c-danger); }
 .badge--discount { background: #e8f5e9; color: var(--c-success); }
 
 .tag {

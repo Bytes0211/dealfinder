@@ -397,7 +397,8 @@ async def watchlist_matches(
             brand=deal.brand,
             status=deal.status.value,
             source_name=deal.source.name if deal.source else None,
-            # Trend analysis — populated from raw_data for WatchlistAgent deals.
+            # Availability and trend analysis — populated from raw_data for WatchlistAgent deals.
+            in_stock=(deal.raw_data or {}).get("in_stock"),
             trend=(deal.raw_data or {}).get("trend"),
             trend_confidence=(deal.raw_data or {}).get("trend_confidence"),
             price_trend=(deal.raw_data or {}).get("price_trend"),

@@ -36,6 +36,7 @@ export function DealCard({ deal }: Props) {
       </div>
 
       <div className="deal-card-footer">
+        {deal.in_stock === false && <span className="badge badge--oos">Out of Stock</span>}
         <span className={`status status--${deal.status}`}>{deal.status}</span>
         <a href={deal.url} target="_blank" rel="noopener noreferrer" className="btn btn-sm">
           View Deal ↗

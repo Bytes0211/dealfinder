@@ -11,6 +11,8 @@ export interface DealResponse {
   brand: string | null;
   status: string;
   source_name: string | null;
+  // Availability — only present on WatchlistAgent-discovered deals.
+  in_stock: boolean | null;
   // Trend analysis — only present on WatchlistAgent-discovered deals.
   trend: 'upward' | 'downward' | 'stable' | null;
   trend_confidence: number | null;

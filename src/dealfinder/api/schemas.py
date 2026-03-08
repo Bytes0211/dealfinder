@@ -56,6 +56,9 @@ class DealResponse(BaseModel):
     status: str
     source_name: Optional[str] = None
 
+    # Availability — populated from raw_data for WatchlistAgent deals.
+    in_stock: Optional[bool] = None
+
     # Trend analysis fields — populated from raw_data for WatchlistAgent deals.
     trend: Optional[str] = None
     trend_confidence: Optional[float] = None
