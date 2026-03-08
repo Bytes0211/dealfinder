@@ -195,7 +195,7 @@ export function FeedPage() {
                   </p>
                 <div className="deal-grid">
                     {visibleDeals.map((deal) => (
-                      <div key={deal.id} className="match-card">
+                      <div key={deal.id} className={`match-card${deal.is_high_value ? ' match-card--hot' : ''}`}>
                         <DealCard deal={deal} />
                         {deal.trend && (
                           <div className="match-card-trend">
