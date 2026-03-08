@@ -9,6 +9,16 @@ function fmt(val: string | null, prefix = '$'): string {
   return val ? `${prefix}${parseFloat(val).toFixed(2)}` : '—';
 }
 
+/** Extract short domain label from a URL, e.g. "amazon" from "https://www.amazon.ca/..." */
+function shortDomain(url: string): string | null {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, '');
+    return host.split('.')[0] || null;
+  } catch {
+    return null;
+  }
+}
+
 export function DealCard({ deal }: Props) {
   return (
     <div className={`deal-card${deal.is_high_value ? ' deal-card--hot' : ''}`}>
@@ -38,6 +48,7 @@ export function DealCard({ deal }: Props) {
       <div className="deal-card-footer">
         {deal.in_stock === false && <span className="badge badge--oos">Out of Stock</span>}
         <span className={`status status--${deal.status}`}>{deal.status}</span>
+        {shortDomain(deal.url) && <span className="deal-card-domain">{shortDomain(deal.url)}</span>}
         <a href={deal.url} target="_blank" rel="noopener noreferrer" className="btn btn-sm">
           View Deal ↗
         </a>

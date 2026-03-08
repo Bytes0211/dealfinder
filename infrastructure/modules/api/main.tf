@@ -142,6 +142,15 @@ resource "aws_iam_role_policy" "api_inline" {
         Resource = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}/${var.environment}/*"
       },
       {
+        Sid    = "Bedrock"
+        Effect = "Allow"
+        Action = ["bedrock:InvokeModel"]
+        Resource = [
+          "arn:aws:bedrock:*::foundation-model/*",
+          "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/*",
+        ]
+      },
+      {
         Sid      = "SnsSubscribe"
         Effect   = "Allow"
         Action   = ["sns:Subscribe", "sns:Unsubscribe", "sns:ListSubscriptionsByTopic"]

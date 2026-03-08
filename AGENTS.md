@@ -12,6 +12,8 @@ Deal Finder is an AI-powered deal hunting system that discovers deals via RSS fe
 
 **Frontend (Session 14):** Preferences page now has an "Email Notifications" section: shows the user's Cognito email address and an opt-in checkbox that sets `notification_preferences.email = true`. MessengerAgent gates all SES dispatch on this flag. SES sandbox: `cottonbytes@gmail.com` verified as a sending/receiving identity.
 
+**Session 15:** Deal cards now show `in_stock` (Out of Stock badge), trend fields from `raw_data`, sale prices, and short domain labels (e.g. "amazon · View Deal ↗"). Bedrock extraction prompt includes `in_stock` boolean. API Lambda granted `bedrock:InvokeModel` IAM (search was silently failing). Search route aligned with watchlist agent (`buy price` suffix, `exclude_domains`). Match-card border fix (single wrapper border with `overflow: hidden`). Fixed `.env.production` with correct Cognito/API Gateway URLs. Added Lambda logging setup (`logging.getLogger().setLevel`).
+
 **Bedrock model config:** All model IDs are centralised in `config/bedrock_models.json`. Edit that file to change models for all agents and Terraform modules at once. Per-Lambda overrides are still possible via the `DEALFINDER_BEDROCK_MODEL_ID` environment variable.
 **Current Bedrock model:** `anthropic.claude-3-haiku-20240307-v1:0` (on-demand, agreement accepted)
 **Upgrade path:** Accept Claude 3.5 Haiku agreement in Bedrock console → update `config/bedrock_models.json` to `us.anthropic.claude-3-5-haiku-20241022-v1:0` → redeploy

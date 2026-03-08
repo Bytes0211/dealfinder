@@ -12,12 +12,17 @@ matching on deal titles — no API changes required on that side.
 import asyncio
 import hashlib
 import logging
+import os
 import re
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
 import httpx
+
+logging.getLogger().setLevel(
+    getattr(logging, os.environ.get("LOG_LEVEL", "INFO").upper(), logging.INFO)
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dealfinder.agents.bedrock import BedrockSearchExtractor

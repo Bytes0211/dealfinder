@@ -175,6 +175,7 @@ h1 { font-size: 1.6rem; font-weight: 700; margin-top: 0; }
 .deal-card-meta { display: flex; gap: .4rem; flex-wrap: wrap; align-items: center; }
 .deal-card-meta-prices { display: inline-flex; align-items: baseline; gap: .4rem; margin-left: auto; }
 .deal-card-footer { display: flex; align-items: center; justify-content: space-between; margin-top: auto; }
+.deal-card-domain { font-size: .7rem; color: var(--c-muted); }
 
 /* ── Badges & tags ────────────────────────────────── */
 .badge {
@@ -457,18 +458,24 @@ h1 { font-size: 1.6rem; font-weight: 700; margin-top: 0; }
 .search-actions { display: flex; gap: .75rem; flex-wrap: wrap; }
 
 /* ── Trend analysis ─────────────────────────────────────── */
-.match-card { display: flex; flex-direction: column; }
+.match-card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.match-card .deal-card { border: none; border-radius: 0; box-shadow: none; }
+.match-card:has(.deal-card--hot) { border-color: var(--c-hot); }
 .match-card-trend {
   padding: .4rem .75rem .5rem;
-  border: 1px solid var(--c-border);
-  border-top: none;
-  border-radius: 0 0 var(--radius) var(--radius);
+  border-top: 1px solid var(--c-border);
   background: var(--c-bg);
   display: flex;
   flex-direction: column;
   gap: .2rem;
 }
-.match-card .deal-card { border-radius: var(--radius) var(--radius) 0 0; }
 .trend-badge {
   display: inline-flex;
   align-items: center;
