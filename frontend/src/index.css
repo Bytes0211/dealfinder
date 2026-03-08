@@ -62,7 +62,7 @@ a:hover { text-decoration: underline; }
 .deal-grid {
   max-height: calc(100vh - 14rem);
   overflow-y: auto;
-  padding-right: .5rem;
+  padding: 2px .5rem 2px 2px;
   scrollbar-width: thin;
   scrollbar-color: var(--c-border) transparent;
 }
