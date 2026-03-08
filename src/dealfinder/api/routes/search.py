@@ -43,11 +43,17 @@ async def _call_tavily(query: str, max_results: int, api_key: str) -> list[dict]
                 _TAVILY_API_URL,
                 json={
                     "api_key": api_key,
-                    "query": query,
+                    "query": f"{query} buy price",
                     "search_depth": "basic",
                     "max_results": max_results,
                     "include_answer": False,
                     "include_raw_content": False,
+                    "exclude_domains": [
+                        "youtube.com",
+                        "reddit.com",
+                        "twitter.com",
+                        "facebook.com",
+                    ],
                 },
             )
             response.raise_for_status()

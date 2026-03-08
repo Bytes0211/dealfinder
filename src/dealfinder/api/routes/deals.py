@@ -65,6 +65,7 @@ async def list_deals(
 
     items = []
     for deal in deals:
+        raw = deal.raw_data or {}
         items.append(DealResponse(
             id=deal.id,
             title=deal.title,
@@ -77,6 +78,15 @@ async def list_deals(
             brand=deal.brand,
             status=deal.status.value,
             source_name=deal.source.name if deal.source else None,
+            in_stock=raw.get("in_stock"),
+            trend=raw.get("trend"),
+            trend_confidence=raw.get("trend_confidence"),
+            price_trend=raw.get("price_trend"),
+            discount_frequency=raw.get("discount_frequency"),
+            stockouts_last_30_days=raw.get("stockouts_last_30_days"),
+            review_velocity=raw.get("review_velocity"),
+            competitor_activity=raw.get("competitor_activity"),
+            trend_summary=raw.get("trend_summary"),
         ))
 
     return DealListResponse(items=items, total=total, limit=limit, offset=offset)
@@ -118,6 +128,15 @@ async def top_deals(
             brand=deal.brand,
             status=deal.status.value,
             source_name=deal.source.name if deal.source else None,
+            in_stock=(deal.raw_data or {}).get("in_stock"),
+            trend=(deal.raw_data or {}).get("trend"),
+            trend_confidence=(deal.raw_data or {}).get("trend_confidence"),
+            price_trend=(deal.raw_data or {}).get("price_trend"),
+            discount_frequency=(deal.raw_data or {}).get("discount_frequency"),
+            stockouts_last_30_days=(deal.raw_data or {}).get("stockouts_last_30_days"),
+            review_velocity=(deal.raw_data or {}).get("review_velocity"),
+            competitor_activity=(deal.raw_data or {}).get("competitor_activity"),
+            trend_summary=(deal.raw_data or {}).get("trend_summary"),
         )
         for deal in deals
     ]
@@ -146,6 +165,7 @@ async def get_deal(deal_id: UUID, db: AsyncSession = Depends(get_db)) -> DealRes
     if not deal:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Deal not found")
 
+    raw = deal.raw_data or {}
     return DealResponse(
         id=deal.id,
         title=deal.title,
@@ -158,4 +178,13 @@ async def get_deal(deal_id: UUID, db: AsyncSession = Depends(get_db)) -> DealRes
         brand=deal.brand,
         status=deal.status.value,
         source_name=deal.source.name if deal.source else None,
+        in_stock=raw.get("in_stock"),
+        trend=raw.get("trend"),
+        trend_confidence=raw.get("trend_confidence"),
+        price_trend=raw.get("price_trend"),
+        discount_frequency=raw.get("discount_frequency"),
+        stockouts_last_30_days=raw.get("stockouts_last_30_days"),
+        review_velocity=raw.get("review_velocity"),
+        competitor_activity=raw.get("competitor_activity"),
+        trend_summary=raw.get("trend_summary"),
     )
