@@ -21,22 +21,22 @@ Deal Finder is an autonomous system that continuously monitors deal sources, use
 
 ```
     ┌─────────────┐
-    │  RSS Feeds   │   Retailer sites, deal forums, aggregators
+    │  RSS Feeds  │   Retailer sites, deal forums, aggregators
     └──────┬──────┘
            │  Every 5-15 minutes
            ▼
     ┌─────────────┐
-    │  1. SCAN     │   Fetch feeds, parse new deals, discard duplicates
+    │  1. SCAN    │   Fetch feeds, parse new deals, discard duplicates
     └──────┬──────┘
            │  New deals found
            ▼
     ┌─────────────┐
-    │  2. EVALUATE │   AI estimates fair market value, calculates real discount
+    │ 2. EVALUATE │   AI estimates fair market value, calculates real discount
     └──────┬──────┘
            │  Discount exceeds your threshold?
            ▼
     ┌─────────────┐
-    │  3. NOTIFY   │   AI crafts a personalized message, sends to your phone/email
+    │  3. NOTIFY  │   AI crafts a personalized message, sends to your phone/email
     └─────────────┘
 ```
 

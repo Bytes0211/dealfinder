@@ -20,16 +20,17 @@ export function DealCard({ deal }: Props) {
       <div className="deal-card-meta">
         {deal.brand && <span className="tag">{deal.brand}</span>}
         {deal.source_name && <span className="tag tag--muted">{deal.source_name}</span>}
-      </div>
-
-      <div className="deal-card-prices">
-        <span className="price price--sale">{fmt(deal.sale_price)}</span>
-        {deal.original_price && (
-          <span className="price price--original">{fmt(deal.original_price)}</span>
-        )}
-        {deal.discount_percentage && (
-          <span className="badge badge--discount">
-            {parseFloat(deal.discount_percentage).toFixed(0)}% off
+        {(deal.sale_price || deal.original_price) && (
+          <span className="deal-card-meta-prices">
+            {deal.sale_price && <span className="price price--sale">{fmt(deal.sale_price)}</span>}
+            {deal.original_price && (
+              <span className="price price--original">{fmt(deal.original_price)}</span>
+            )}
+            {deal.discount_percentage && (
+              <span className="badge badge--discount">
+                {parseFloat(deal.discount_percentage).toFixed(0)}% off
+              </span>
+            )}
           </span>
         )}
       </div>

@@ -172,8 +172,8 @@ h1 { font-size: 1.6rem; font-weight: 700; margin-top: 0; }
 
 .deal-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: .5rem; }
 .deal-title { font-weight: 600; font-size: .95rem; line-height: 1.3; }
-.deal-card-meta { display: flex; gap: .4rem; flex-wrap: wrap; }
-.deal-card-prices { display: flex; align-items: baseline; gap: .6rem; flex-wrap: wrap; }
+.deal-card-meta { display: flex; gap: .4rem; flex-wrap: wrap; align-items: center; }
+.deal-card-meta-prices { display: inline-flex; align-items: baseline; gap: .4rem; margin-left: auto; }
 .deal-card-footer { display: flex; align-items: center; justify-content: space-between; margin-top: auto; }
 
 /* ── Badges & tags ────────────────────────────────── */
