@@ -467,7 +467,7 @@ h1 { font-size: 1.6rem; font-weight: 700; margin-top: 0; }
   box-shadow: var(--shadow);
 }
 .match-card .deal-card { border: none; border-radius: 0; box-shadow: none; }
-.match-card.match-card--hot { border: 2px solid #ff6b35; }
+.match-card.match-card--hot { outline: 2px solid #ff6b35; outline-offset: -2px; }
 .match-card-trend {
   padding: .4rem .75rem .5rem;
   border-top: 1px solid var(--c-border);
