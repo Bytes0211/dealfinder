@@ -12,7 +12,9 @@ matching on deal titles — no API changes required on that side.
 import asyncio
 import hashlib
 import logging
+import re
 from datetime import datetime, timezone
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 import httpx
@@ -52,6 +54,30 @@ def _watchlist_url(query: str) -> str:
         URI string, e.g. ``watchlist://sony headphones``.
     """
     return f"watchlist://{_normalize_query(query)}"
+
+
+def _parse_price(value: str | None) -> Decimal | None:
+    """Parse a price string like '$279.99' into a Decimal.
+
+    Strips currency symbols, commas, and whitespace. Returns None if the
+    value is missing, empty, or cannot be parsed as a positive number.
+
+    Args:
+        value: Raw price string from Bedrock enrichment, e.g. ``"$1,299.99"``.
+
+    Returns:
+        Decimal price or None if unparsable.
+    """
+    if not value:
+        return None
+    cleaned = re.sub(r"[^\d.]", "", value.strip())
+    if not cleaned:
+        return None
+    try:
+        d = Decimal(cleaned).quantize(Decimal("0.01"))
+        return d if d > 0 else None
+    except (InvalidOperation, ArithmeticError):
+        return None
 
 
 class WatchlistAgent:
@@ -208,11 +234,14 @@ class WatchlistAgent:
             quality_score = result.get("quality_score")
             is_high_value = bool(quality_score is not None and float(quality_score) >= 7.0)
 
+            sale_price = _parse_price(result.get("current_price"))
+
             deal = Deal(
                 source_id=source.id,
                 external_id=external_id,
                 title=(result.get("title") or query)[:500],
                 url=url,
+                sale_price=sale_price,
                 status=DealStatus.EVALUATED,
                 is_high_value=is_high_value,
                 raw_data=result,
