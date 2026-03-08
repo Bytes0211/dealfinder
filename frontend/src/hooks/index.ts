@@ -42,6 +42,7 @@ export function useUpdatePreferences(userId: string) {
     mutationFn: (body: UserPreferencesUpdate) => updatePreferences(userId, body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user', userId] });
+      queryClient.invalidateQueries({ queryKey: ['watchlist-matches', userId] });
     },
   });
 }
