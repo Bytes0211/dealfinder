@@ -48,6 +48,36 @@ React SPA (CloudFront) → API Gateway → Lambda (FastAPI/Mangum) → Aurora
 - **MessengerAgent**: Generates personalized notifications using Claude, dispatches via SNS/SES; handles both deal alerts and `no_deals_feed` events (Lambda)
 - **WatchlistAgent**: Scheduled (30-min EventBridge) proactive deal discovery via Tavily + Bedrock trend enrichment (Lambda)
 
+
+---
+
+### AI Model Configuration
+
+Bedrock models are configured centrally in `config/bedrock_models.json`. To swap or upgrade a model, edit this file — no code changes required.
+
+```json
+{
+  "_comment": "Central Bedrock model configuration. Update model IDs here when AWS deprecates or you upgrade models.",
+  "default": "anthropic.claude-3-haiku-20240307-v1:0",
+  "estimator": "anthropic.claude-3-haiku-20240307-v1:0",
+  "messenger": "anthropic.claude-3-haiku-20240307-v1:0",
+  "search_extractor": "anthropic.claude-3-haiku-20240307-v1:0",
+  "watchlist": "anthropic.claude-3-haiku-20240307-v1:0"
+}
+```
+
+| Key | Used By |
+|-----|---------|
+| `default` | Fallback if a specific key is not matched |
+| `estimator` | EvaluatorAgent — price estimation via Bedrock |
+| `messenger` | MessengerAgent — notification crafting via Bedrock |
+| `search_extractor` | WatchlistAgent search — `BedrockSearchExtractor` |
+| `watchlist` | WatchlistAgent — trend enrichment via Bedrock |
+
+To upgrade a model, update the relevant key and redeploy the affected Lambda. All agents read from this file at startup.
+
+---
+
 ### Orchestration
 AWS Step Functions coordinates the pipeline:
 ```
