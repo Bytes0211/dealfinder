@@ -20,13 +20,6 @@ from .jsonb_patch import enable_sqlite_jsonb_support
 
 """Shared fixtures for regression test suite covering the deal pipeline."""
 
-FAKE_AWS_ENVIRONMENT = {
-    "sns_topic_arn": "arn:aws:sns:us-east-1:000000000000:regression-deal-events",
-    "sqs_queue_url": "https://sqs.us-east-1.amazonaws.com/000000000000/regression-deal-queue",
-    "dynamodb_table": "deal-notification-state",
-    "verified_email": "regression@example.com",
-}
-
 
 @pytest_asyncio.fixture
 async def sqlite_engine() -> AsyncIterator[AsyncEngine]:
@@ -70,27 +63,3 @@ async def db_session(
     finally:
         await session.rollback()
         await session.close()
-
-
-@pytest.fixture(scope="session")
-def regression_aws_environment() -> dict[str, str]:
-    return FAKE_AWS_ENVIRONMENT.copy()
-
-
-@pytest.fixture
-def pipeline_env_variables(regression_aws_environment: dict[str, str]) -> Iterator[dict[str, str]]:
-    overrides = {
-        "DEALFINDER_SNS_TOPIC_ARN": regression_aws_environment["sns_topic_arn"],
-        "DEALFINDER_SQS_QUEUE_URL": regression_aws_environment["sqs_queue_url"],
-        "DEALFINDER_DYNAMODB_TABLE": regression_aws_environment["dynamodb_table"],
-    }
-    previous = {key: os.environ.get(key) for key in overrides}
-    os.environ.update(overrides)
-    try:
-        yield regression_aws_environment
-    finally:
-        for key, value in previous.items():
-            if value is None:
-                os.environ.pop(key, None)
-            else:
-                os.environ[key] = value
