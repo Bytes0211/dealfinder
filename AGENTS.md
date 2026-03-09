@@ -8,7 +8,7 @@ Deal Finder is an AI-powered deal hunting system that discovers deals via RSS fe
 
 **Status:** Phase 7 complete and live in production. WatchlistAgent Lambda runs on a 30-minute EventBridge schedule, proactively discovering deals via Tavily search + Bedrock (Claude 3 Haiku) enrichment. SQLEnum casing bug and Bedrock Legacy model bug fixed (Session 12). Bedrock IAM policies updated to support cross-region inference profiles.
 
-**Frontend (Session 13):** "Matched Deals" feed page (renamed from Feed) supports per-watchlist-entry filter toggle (client-side keyword filtering), scrollable deal grid with sticky watchlist section, and consistent page spacing across all pages.
+**Frontend (Session 13):** "Matched Deals" feed page (renamed from Feed) supports per-watchlist-entry filter toggle (client-side keyword filtering), scrollable deal grid with sticky watchlist section, and consistent page spacing across all pages. Sales Price, Out-of-Stock status displayed.
 
 **Frontend (Session 14):** Preferences page now has an "Email Notifications" section: shows the user's Cognito email address and an opt-in checkbox that sets `notification_preferences.email = true`. MessengerAgent gates all SES dispatch on this flag. SES sandbox: `cottonbytes@gmail.com` verified as a sending/receiving identity.
 
