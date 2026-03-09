@@ -4,6 +4,11 @@
 
 An intelligent multi-agent system that discovers online deals through RSS feeds, estimates prices using AWS Bedrock (Claude), and delivers real-time notifications for high-value opportunities. Built serverless on AWS by a solo developer.
 
+## Dealfinder in action - matched deals with real-time trend analysis
+
+![screenshot](dealfinder-screenshot.jpg)
+
+
 ## Project Status
 
 **Current Phase:** Phase 7 Complete — WatchlistAgent + React Frontend Live in Production
@@ -28,9 +33,9 @@ React SPA (CloudFront) → API Gateway → Lambda (FastAPI/Mangum) → Aurora
 
 ### Agent Architecture
 - **ScannerAgent**: Scrapes RSS feeds for deals (Lambda)
-- **EvaluatorAgent**: Estimates prices via Bedrock, calculates discounts (Lambda)
-- **PipelineSummaryAgent**: Aggregates per-feed match results, enqueues no-deals notifications (Lambda)
-- **MessengerAgent**: Generates personalized notifications using Claude, dispatches via SNS/SES (Lambda)
+- **EvaluatorAgent**: Estimates prices via Bedrock, calculates discounts, returns `matched_feed_pairs` (Lambda)
+- **PipelineSummaryAgent**: Aggregates per-feed match results, enqueues per-feed no-deals notifications with 24h dedup (Lambda)
+- **MessengerAgent**: Generates personalized notifications using Claude, dispatches via SNS/SES; handles both deal alerts and `no_deals_feed` events (Lambda)
 - **WatchlistAgent**: Scheduled (30-min EventBridge) proactive deal discovery via Tavily + Bedrock trend enrichment (Lambda)
 
 ### Orchestration
@@ -135,7 +140,7 @@ dealfinder/
 │       └── index.py               # Index management and mappings
 ├── tests/
 │   ├── unit/
-│   │   ├── agents/                # Agent unit tests (357 pass)
+│   │   ├── agents/                # Agent unit tests
 │   │   ├── notifications/         # SesClient tests
 │   │   ├── api/                   # FastAPI endpoint tests
 │   │   ├── db/                    # ORM model tests
@@ -162,7 +167,7 @@ git clone https://github.com/Bytes0211/dealfinder.git
 cd dealfinder
 
 # Install dependencies (including dev tools)
-uv pip install -e ".[dev]"
+uv sync --all-extras --dev
 
 # Bootstrap Terraform backend (one-time)
 cd infrastructure
