@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
+import os
 from decimal import Decimal
 from types import SimpleNamespace
 from uuid import uuid4
 
+import boto3
 import pytest
+from moto import mock_aws
 from sqlalchemy import text
 
 from dealfinder.agents.config import AgentConfig
@@ -15,15 +18,6 @@ from dealfinder.data.repository import DealRepository
 from dealfinder.db.models import Deal, DealSource, DealStatus
 
 pytestmark = pytest.mark.asyncio
-
-
-class _StubQueue:
-    def __init__(self) -> None:
-        self.messages: list[dict[str, str]] = []
-
-    def send_message(self, QueueUrl: str, MessageBody: str) -> dict[str, str]:
-        self.messages.append({"QueueUrl": QueueUrl, "MessageBody": MessageBody})
-        return {"MessageId": "stubbed-message"}
 
 
 class _SessionContext:
@@ -102,12 +96,13 @@ async def _create_pipeline_deal(session, source: DealSource, title: str, link: s
     return deal
 
 
-async def _patch_evaluator_dependencies(
+def _patch_evaluator_dependencies(
     monkeypatch,
     regression_session_factory,
-    queue_stub: _StubQueue,
     saved_feeds: list[dict[str, str]],
 ):
+    """Patch evaluator dependencies to use in-memory session and test feeds."""
+
     class _DummyUser:
         def __init__(self, feeds: list[dict[str, str]]) -> None:
             self.id = uuid4()
@@ -125,10 +120,6 @@ async def _patch_evaluator_dependencies(
         "dealfinder.agents.evaluator.get_async_session",
         lambda: _SessionContext(regression_session_factory),
         raising=False,
-    )
-    monkeypatch.setattr(
-        "dealfinder.agents.evaluator.boto3.client",
-        lambda *_args, **_kwargs: queue_stub,
     )
 
 
@@ -166,25 +157,57 @@ async def test_high_value_deal_triggers_notification_queue(
         await session.commit()
         deal_id = deal.id
 
-    queue_stub = _StubQueue()
-    saved_feeds = [{"id": "feed-laptop", "query": "Mega Laptop"}]
-    await _patch_evaluator_dependencies(
-        monkeypatch, regression_session_factory, queue_stub, saved_feeds
-    )
+    result = None
+    messages: list[dict] = []
+    with mock_aws():
+        sqs = boto3.client("sqs", region_name="us-east-1")
+        queue_url = sqs.create_queue(QueueName="regression-deal-queue")["QueueUrl"]
 
-    config = _build_agent_config(pipeline_env_variables["sqs_queue_url"], discount_threshold=20.0)
-    evaluator = EvaluatorAgent(config=config)
-    evaluator.estimator = _prepare_estimator(estimated_price=Decimal("400"))
+        dynamodb = boto3.client("dynamodb", region_name="us-east-1")
+        table_name = pipeline_env_variables["dynamodb_table"]
+        try:
+            dynamodb.create_table(
+                TableName=table_name,
+                KeySchema=[{"AttributeName": "pk", "KeyType": "HASH"}],
+                AttributeDefinitions=[{"AttributeName": "pk", "AttributeType": "S"}],
+                BillingMode="PAY_PER_REQUEST",
+            )
+        except dynamodb.exceptions.ResourceInUseException:
+            pass
+        dynamodb.get_waiter("table_exists").wait(TableName=table_name)
 
-    result = await evaluator.evaluate_deal(deal_id)
+        previous_sqs = os.environ.get("DEALFINDER_SQS_QUEUE_URL")
+        previous_table = os.environ.get("DEALFINDER_DYNAMODB_TABLE")
+        os.environ["DEALFINDER_SQS_QUEUE_URL"] = queue_url
+        os.environ["DEALFINDER_DYNAMODB_TABLE"] = table_name
 
+        try:
+            saved_feeds = [{"id": "feed-laptop", "query": "Mega Laptop"}]
+            _patch_evaluator_dependencies(monkeypatch, regression_session_factory, saved_feeds)
+            config = _build_agent_config(queue_url, discount_threshold=20.0)
+            evaluator = EvaluatorAgent(config=config)
+            evaluator.estimator = _prepare_estimator(estimated_price=Decimal("400"))
+            result = await evaluator.evaluate_deal(deal_id)
+            messages = sqs.receive_message(QueueUrl=queue_url, MaxNumberOfMessages=10).get(
+                "Messages", []
+            )
+        finally:
+            if previous_sqs is None:
+                os.environ.pop("DEALFINDER_SQS_QUEUE_URL", None)
+            else:
+                os.environ["DEALFINDER_SQS_QUEUE_URL"] = previous_sqs
+            if previous_table is None:
+                os.environ.pop("DEALFINDER_DYNAMODB_TABLE", None)
+            else:
+                os.environ["DEALFINDER_DYNAMODB_TABLE"] = previous_table
+
+    assert result is not None
     assert result["status"] == "evaluated"
     assert result["is_high_value"] is True
     assert result["discount_percentage"] == pytest.approx(75.0, rel=1e-6)
-    assert queue_stub.messages, "Expected SQS message for high-value deal"
-    message = queue_stub.messages[0]
-    assert message["QueueUrl"] == pipeline_env_variables["sqs_queue_url"]
-    assert json.loads(message["MessageBody"])["deal_id"] == str(deal_id)
+    assert len(messages) == 1, "Expected SQS message for high-value deal"
+    body = json.loads(messages[0]["Body"])
+    assert body["deal_id"] == str(deal_id)
     assert result["matched_feed_pairs"]
     refreshed_deal = await _verify_deal_status(regression_session_factory, deal_id)
     assert refreshed_deal.status == DealStatus.EVALUATED
@@ -210,22 +233,55 @@ async def test_sub_threshold_deal_skips_notification_queue(
         await session.commit()
         deal_id = deal.id
 
-    queue_stub = _StubQueue()
-    saved_feeds = [{"id": "feed-mouse", "query": "Office Chair"}]
-    await _patch_evaluator_dependencies(
-        monkeypatch, regression_session_factory, queue_stub, saved_feeds
-    )
+    result = None
+    messages: list[dict] = []
+    with mock_aws():
+        sqs = boto3.client("sqs", region_name="us-east-1")
+        queue_url = sqs.create_queue(QueueName="regression-deal-queue-low")["QueueUrl"]
 
-    config = _build_agent_config(pipeline_env_variables["sqs_queue_url"], discount_threshold=20.0)
-    evaluator = EvaluatorAgent(config=config)
-    evaluator.estimator = _prepare_estimator(estimated_price=Decimal("105"))
+        dynamodb = boto3.client("dynamodb", region_name="us-east-1")
+        table_name = pipeline_env_variables["dynamodb_table"]
+        try:
+            dynamodb.create_table(
+                TableName=table_name,
+                KeySchema=[{"AttributeName": "pk", "KeyType": "HASH"}],
+                AttributeDefinitions=[{"AttributeName": "pk", "AttributeType": "S"}],
+                BillingMode="PAY_PER_REQUEST",
+            )
+        except dynamodb.exceptions.ResourceInUseException:
+            pass
+        dynamodb.get_waiter("table_exists").wait(TableName=table_name)
 
-    result = await evaluator.evaluate_deal(deal_id)
+        previous_sqs = os.environ.get("DEALFINDER_SQS_QUEUE_URL")
+        previous_table = os.environ.get("DEALFINDER_DYNAMODB_TABLE")
+        os.environ["DEALFINDER_SQS_QUEUE_URL"] = queue_url
+        os.environ["DEALFINDER_DYNAMODB_TABLE"] = table_name
 
+        try:
+            saved_feeds = [{"id": "feed-mouse", "query": "Office Chair"}]
+            _patch_evaluator_dependencies(monkeypatch, regression_session_factory, saved_feeds)
+            config = _build_agent_config(queue_url, discount_threshold=20.0)
+            evaluator = EvaluatorAgent(config=config)
+            evaluator.estimator = _prepare_estimator(estimated_price=Decimal("105"))
+            result = await evaluator.evaluate_deal(deal_id)
+            messages = sqs.receive_message(QueueUrl=queue_url, MaxNumberOfMessages=10).get(
+                "Messages", []
+            )
+        finally:
+            if previous_sqs is None:
+                os.environ.pop("DEALFINDER_SQS_QUEUE_URL", None)
+            else:
+                os.environ["DEALFINDER_SQS_QUEUE_URL"] = previous_sqs
+            if previous_table is None:
+                os.environ.pop("DEALFINDER_DYNAMODB_TABLE", None)
+            else:
+                os.environ["DEALFINDER_DYNAMODB_TABLE"] = previous_table
+
+    assert result is not None
     assert result["status"] == "evaluated"
     assert result["is_high_value"] is False
     assert result["matched_feed_pairs"] == []
-    assert queue_stub.messages == [], "No SQS messages should be sent for sub-threshold deals"
+    assert messages == [], "No SQS messages should be sent for sub-threshold deals"
     refreshed_deal = await _verify_deal_status(regression_session_factory, deal_id)
     assert refreshed_deal.status == DealStatus.EVALUATED
     assert refreshed_deal.is_high_value is False
@@ -251,26 +307,59 @@ async def test_watchlist_dedup_sends_single_notification(
         await session.commit()
         deal_id = deal.id
 
-    queue_stub = _StubQueue()
-    saved_feeds = [
-        {"id": "feed-gaming-1", "query": "Ultimate Gaming"},
-        {"id": "feed-gaming-2", "query": "Gaming Rig Ultimate"},
-        {"id": "feed-miss", "query": "Office Chair"},
-    ]
-    await _patch_evaluator_dependencies(
-        monkeypatch, regression_session_factory, queue_stub, saved_feeds
-    )
+    result = None
+    messages: list[dict] = []
+    with mock_aws():
+        sqs = boto3.client("sqs", region_name="us-east-1")
+        queue_url = sqs.create_queue(QueueName="regression-deal-queue-watch")["QueueUrl"]
 
-    config = _build_agent_config(pipeline_env_variables["sqs_queue_url"], discount_threshold=25.0)
-    evaluator = EvaluatorAgent(config=config)
-    evaluator.estimator = _prepare_estimator(estimated_price=Decimal("1500"))
+        dynamodb = boto3.client("dynamodb", region_name="us-east-1")
+        table_name = pipeline_env_variables["dynamodb_table"]
+        try:
+            dynamodb.create_table(
+                TableName=table_name,
+                KeySchema=[{"AttributeName": "pk", "KeyType": "HASH"}],
+                AttributeDefinitions=[{"AttributeName": "pk", "AttributeType": "S"}],
+                BillingMode="PAY_PER_REQUEST",
+            )
+        except dynamodb.exceptions.ResourceInUseException:
+            pass
+        dynamodb.get_waiter("table_exists").wait(TableName=table_name)
 
-    result = await evaluator.evaluate_deal(deal_id)
+        previous_sqs = os.environ.get("DEALFINDER_SQS_QUEUE_URL")
+        previous_table = os.environ.get("DEALFINDER_DYNAMODB_TABLE")
+        os.environ["DEALFINDER_SQS_QUEUE_URL"] = queue_url
+        os.environ["DEALFINDER_DYNAMODB_TABLE"] = table_name
 
+        try:
+            saved_feeds = [
+                {"id": "feed-gaming-1", "query": "Ultimate Gaming"},
+                {"id": "feed-gaming-2", "query": "Gaming Rig Ultimate"},
+                {"id": "feed-miss", "query": "Office Chair"},
+            ]
+            _patch_evaluator_dependencies(monkeypatch, regression_session_factory, saved_feeds)
+            config = _build_agent_config(queue_url, discount_threshold=25.0)
+            evaluator = EvaluatorAgent(config=config)
+            evaluator.estimator = _prepare_estimator(estimated_price=Decimal("1500"))
+            result = await evaluator.evaluate_deal(deal_id)
+            messages = sqs.receive_message(QueueUrl=queue_url, MaxNumberOfMessages=10).get(
+                "Messages", []
+            )
+        finally:
+            if previous_sqs is None:
+                os.environ.pop("DEALFINDER_SQS_QUEUE_URL", None)
+            else:
+                os.environ["DEALFINDER_SQS_QUEUE_URL"] = previous_sqs
+            if previous_table is None:
+                os.environ.pop("DEALFINDER_DYNAMODB_TABLE", None)
+            else:
+                os.environ["DEALFINDER_DYNAMODB_TABLE"] = previous_table
+
+    assert result is not None
     assert result["is_high_value"] is True
     assert len(result["matched_feed_pairs"]) == 2
-    assert len(queue_stub.messages) == 1, "Queue should receive a single message per deal"
-    message_body = json.loads(queue_stub.messages[0]["MessageBody"])
+    assert len(messages) == 1, "Queue should receive a single message per deal"
+    message_body = json.loads(messages[0]["Body"])
     assert message_body["deal_id"] == str(deal_id)
     refreshed_deal = await _verify_deal_status(regression_session_factory, deal_id)
     assert refreshed_deal.is_high_value is True

@@ -21,12 +21,9 @@ _CONFIG_FILE = Path(__file__).resolve().parents[3] / "config" / "bedrock_models.
 def _load_default_model_id() -> str:
     """Load the default Bedrock model ID from config/bedrock_models.json.
 
-    Falls back to a hardcoded model ID if the config file is missing or
-    cannot be parsed (e.g. inside a Lambda deployment package that does
-    not include the config directory).
-
     Returns:
-        Bedrock model ID string.
+        str: Default Bedrock model ID, falling back to a hardcoded value when the
+        configuration file is missing or invalid.
     """
     try:
         data = json.loads(_CONFIG_FILE.read_text(encoding="utf-8"))
@@ -37,18 +34,18 @@ def _load_default_model_id() -> str:
 
 
 class AgentConfig(BaseSettings):
-    """Configuration for Lambda agent functions.
+    """Configuration values for Lambda-based agents.
 
     Attributes:
-        discount_threshold: Minimum discount percentage to flag a deal as high value.
-        bedrock_region: AWS region used for Bedrock API calls.
-        bedrock_model_id: Bedrock model identifier for Claude. Loaded from
-            config/bedrock_models.json by default; override via
-            DEALFINDER_BEDROCK_MODEL_ID env var.
-        notification_queue_url: SQS URL for the notification-dispatch queue.
-        ses_sender_email: Verified SES sender address for email notifications.
-        sns_topic_arn: ARN of the SNS topic for deal alert fan-out.
-        dedup_table_name: DynamoDB table used for 24-hour notification deduplication.
+        discount_threshold (float): Minimum discount percentage that marks a deal as high value.
+        bedrock_region (str): AWS region used for Bedrock API invocations.
+        bedrock_model_id (str): Default Bedrock model identifier for Claude. Loaded from
+            ``config/bedrock_models.json`` unless overridden via ``DEALFINDER_BEDROCK_MODEL_ID``.
+        notification_queue_url (str): SQS URL for the notification-dispatch queue.
+        tavily_api_key (str): API key used by the Watchlist agent to query Tavily.
+        ses_sender_email (str): Verified SES sender address for email notifications.
+        sns_topic_arn (str): ARN of the SNS topic for deal alert fan-out.
+        dedup_table_name (str): DynamoDB table used for 24-hour notification deduplication.
     """
 
     model_config = SettingsConfigDict(

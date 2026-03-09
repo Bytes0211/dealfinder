@@ -28,12 +28,12 @@ class PriceEstimationResult:
     """Result from a Bedrock price estimation call.
 
     Attributes:
-        estimated_price: Estimated fair market retail value.
-        confidence: Confidence score in the estimate, 0.0–1.0.
-        range_low: Lower bound of the estimated price range.
-        range_high: Upper bound of the estimated price range.
-        model_id: Bedrock model ID used for inference.
-        inference_time_ms: Wall-clock inference duration in milliseconds.
+        estimated_price (Decimal): Estimated fair market retail value.
+        confidence (Decimal): Confidence score in the estimate, 0.0–1.0.
+        range_low (Decimal | None): Lower bound of the estimated price range.
+        range_high (Decimal | None): Upper bound of the estimated price range.
+        model_id (str): Bedrock model ID used for inference.
+        inference_time_ms (int): Wall-clock inference duration in milliseconds.
     """
 
     estimated_price: Decimal
@@ -133,12 +133,14 @@ class BedrockPriceEstimator:
         if description:
             lines.append(f"Description: {_sanitize(description)}")
         lines.append(f"Current sale price: ${sale_price}")
-        lines.extend([
-            "",
-            "Respond with ONLY a JSON object (no markdown, no explanation):",
-            '{"estimated_price": <number>, "confidence": <0.0-1.0>,'
-            ' "range_low": <number>, "range_high": <number>, "reasoning": "<brief>"}',
-        ])
+        lines.extend(
+            [
+                "",
+                "Respond with ONLY a JSON object (no markdown, no explanation):",
+                '{"estimated_price": <number>, "confidence": <0.0-1.0>,'
+                ' "range_low": <number>, "range_high": <number>, "reasoning": "<brief>"}',
+            ]
+        )
         return "\n".join(lines)
 
     def _parse_response(self, response_text: str) -> dict:
@@ -147,14 +149,14 @@ class BedrockPriceEstimator:
         Handles responses that wrap JSON in markdown code fences.
 
         Args:
-            response_text: Raw text content from the Claude response.
+            response_text (str): Raw text content from the Claude response.
 
         Returns:
-            Parsed response dict with at minimum estimated_price and confidence.
+            dict: Parsed response containing at least ``estimated_price`` and ``confidence``.
 
         Raises:
-            ValueError: If no JSON object is found or required fields are missing.
-            ValueError: If confidence is outside the 0.0–1.0 range.
+            ValueError: If no JSON object is found, required fields are missing, or the
+                confidence value falls outside the 0.0–1.0 range.
         """
         start = response_text.find("{")
         if start == -1:
@@ -202,12 +204,14 @@ class BedrockPriceEstimator:
             ValueError: If the Claude response cannot be parsed as valid price data.
         """
         prompt = self._build_prompt(title, sale_price, description, brand)
-        body = json.dumps({
-            "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 256,
-            "temperature": 0.1,
-            "messages": [{"role": "user", "content": prompt}],
-        })
+        body = json.dumps(
+            {
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 256,
+                "temperature": 0.1,
+                "messages": [{"role": "user", "content": prompt}],
+            }
+        )
 
         start_ms = int(time.time() * 1000)
 
@@ -291,14 +295,16 @@ class BedrockSearchExtractor:
         return self._client
 
     def _build_extraction_prompt(self, results: list[dict], include_trends: bool = False) -> str:
-        """Build a structured extraction + quality scoring prompt for Claude.
+        """Build a structured extraction and quality-scoring prompt for Claude.
 
         Args:
-            results: List of raw Tavily result dicts with title, url, content keys.
-            include_trends: If True, append trend analysis fields to the output schema.
+            results (list[dict]): Raw Tavily result dictionaries with ``title``, ``url``,
+                and ``content`` keys.
+            include_trends (bool): Whether to append trend analysis fields to the output
+                schema.
 
         Returns:
-            Formatted prompt string ready to be sent to Claude.
+            str: Formatted prompt string ready to be sent to Claude.
         """
         condensed = [
             {
@@ -314,7 +320,7 @@ class BedrockSearchExtractor:
             "For each result return:\n"
             "- title: Clean product name (remove store names and marketing filler)\n"
             "- url: The product URL exactly as provided\n"
-            "- current_price: Current sale price as a string (e.g. \"$279.99\") or null if not found. "
+            '- current_price: Current sale price as a string (e.g. "$279.99") or null if not found. '
             "If multiple prices are listed, use the lowest retail price.\n"
             "- in_stock: true if the product appears to be available/in stock, false if out of stock or unavailable\n"
             "- quality_score: Float 0.0\u201310.0 rating the deal quality\n"
@@ -329,13 +335,13 @@ class BedrockSearchExtractor:
 
         if include_trends:
             fields += (
-                "\n- trend: \"upward\" | \"downward\" | \"stable\" \u2014 inferred demand trend\n"
+                '\n- trend: "upward" | "downward" | "stable" \u2014 inferred demand trend\n'
                 "- trend_confidence: Float 0.0\u20131.0 \u2014 confidence in trend assessment\n"
-                "- price_trend: \"increasing\" | \"decreasing\" | \"stable\"\n"
-                "- discount_frequency: \"low\" | \"medium\" | \"high\" \u2014 how often this product is discounted\n"
+                '- price_trend: "increasing" | "decreasing" | "stable"\n'
+                '- discount_frequency: "low" | "medium" | "high" \u2014 how often this product is discounted\n'
                 "- stockouts_last_30_days: Integer 0\u201310 estimate of stockout events, or null if unknown\n"
-                "- review_velocity: \"low\" | \"medium\" | \"high\" \u2014 rate of new customer reviews\n"
-                "- competitor_activity: \"stable\" | \"increasing\" | \"decreasing\"\n"
+                '- review_velocity: "low" | "medium" | "high" \u2014 rate of new customer reviews\n'
+                '- competitor_activity: "stable" | "increasing" | "decreasing"\n'
                 "- trend_summary: Max 20-word explanation of the overall demand trend"
             )
             example += (
@@ -360,11 +366,13 @@ class BedrockSearchExtractor:
         Falls back to minimal results (title/url only) if parsing fails.
 
         Args:
-            response_text: Raw Claude output.
-            original: Original Tavily results used as fallback source for title/url.
+            response_text (str): Raw Claude output.
+            original (list[dict]): Original Tavily results used as a fallback source for
+                ``title`` and ``url``.
 
         Returns:
-            List of dicts with title, url, current_price, quality_score, quality_reason keys.
+            list[dict]: Enriched results containing ``title``, ``url``, ``current_price``,
+            ``quality_score``, and ``quality_reason`` keys.
         """
         start = response_text.find("[")
         if start != -1:
@@ -376,8 +384,13 @@ class BedrockSearchExtractor:
                 pass
         logger.warning("BedrockSearchExtractor: failed to parse Claude response; using fallbacks")
         return [
-            {"title": r.get("title", ""), "url": r.get("url", ""),
-             "current_price": None, "quality_score": None, "quality_reason": None}
+            {
+                "title": r.get("title", ""),
+                "url": r.get("url", ""),
+                "current_price": None,
+                "quality_score": None,
+                "quality_reason": None,
+            }
             for r in original
         ]
 
@@ -404,12 +417,14 @@ class BedrockSearchExtractor:
         prompt = self._build_extraction_prompt(results, include_trends=include_trends)
         # Trend fields add ~150 tokens per result; 4096 comfortably fits 10 results.
         max_tokens = 4096 if include_trends else 1024
-        body = json.dumps({
-            "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": max_tokens,
-            "temperature": 0.1,
-            "messages": [{"role": "user", "content": prompt}],
-        })
+        body = json.dumps(
+            {
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": max_tokens,
+                "temperature": 0.1,
+                "messages": [{"role": "user", "content": prompt}],
+            }
+        )
 
         try:
             response = self.client.invoke_model(
