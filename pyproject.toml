@@ -24,6 +24,7 @@ dependencies = [
     "email-validator>=2.3.0",
     "bcrypt>=4.0.0",
     "uvicorn>=0.41.0",
+    "moto>=5.1.22",
 ]
 
 [project.optional-dependencies]

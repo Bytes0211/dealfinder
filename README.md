@@ -126,7 +126,7 @@ dealfinder/
 │   ├── db/
 │   │   ├── models.py              # SQLAlchemy ORM models (5 models, 3 enums)
 │   │   ├── connection.py          # Async engine and session management
-│   │   └── alembic/               # Database migrations (006 applied)
+│   │   └── alembic/               # Database migrations (008 applied)
 │   ├── data/
 │   │   └── repository.py          # Repository pattern (5 repository classes)
 │   └── search/
@@ -256,6 +256,10 @@ Feature flags keep idle dev costs at ~$4-10/month:
 - Updated Bedrock model to `anthropic.claude-3-haiku-20240307-v1:0`
 - Dual-ARN Bedrock IAM policy (foundation-model + inference-profile)
 - Frontend: watchlist feed filter, scrollable deal grid, consistent page spacing
+- Deal cards: `in_stock` badge, trend analysis panel, sale prices, short domain labels
+- Hot deal cards: orange outline border (CSS `outline` for dark mode resilience)
+- API Lambda granted `bedrock:InvokeModel` IAM; search route aligned with watchlist agent
+- Fixed `.env.production` Cognito/API Gateway URLs; restored Cognito callback URLs
 
 ## Documentation
 
