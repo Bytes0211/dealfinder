@@ -302,7 +302,8 @@ The following were removed during the Feb 2026 scope revision to keep the projec
 
 ## Contact
 
-*To be added*
+- Name: Steven Cotton
+- Email: stevenwcotton@gmail.com
 
 ## License
 
