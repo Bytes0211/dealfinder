@@ -9,42 +9,42 @@ This document describes the complete user journey through the Deal Finder applic
 ## 1. User Journey Overview
 
 ```mermaid
-flowchart TD
-    classDef page fill:#274060,stroke:#274060,color:#ffffff
-    classDef action fill:#335C81,stroke:#335C81,color:#ffffff
-    classDef outcome fill:#65AFFF,stroke:#274060,color:#1B2845
-    classDef system fill:#1B2845,stroke:#1B2845,color:#ffffff
+    flowchart TD
+        classDef page fill:#274060,stroke:#274060,color:#ffffff
+        classDef action fill:#335C81,stroke:#335C81,color:#ffffff
+        classDef outcome fill:#65AFFF,stroke:#274060,color:#1B2845
+        classDef system fill:#1B2845,stroke:#1B2845,color:#ffffff
 
-    Visit["User visits app\n(CloudFront)"]:::page
+        Visit["User visits app\n(CloudFront)"]:::page
 
-    Visit --> Unauth
+        Visit --> Unauth
 
-    subgraph Unauth["Without Login"]
-        TopDeals["Browse Top Deals\n🔥 highest-discount deals\nsorted by % off"]:::page
-    end
+        subgraph Unauth["Without Login"]
+            TopDeals["Browse Top Deals\n🔥 highest-discount deals\nsorted by % off"]:::page
+        end
 
-    Visit --> Login
+        Visit --> Login
 
-    subgraph Login["Sign In (Cognito)"]
-        LoginBtn["Click 'Sign in with Cognito'"]:::action
-        Cognito["Cognito Hosted UI\noAuth2 PKCE redirect"]:::system
-        Callback["Callback — JWT stored\nuser auto-provisioned in DB"]:::system
-        LoginBtn --> Cognito --> Callback
-    end
+        subgraph Login["Sign In (Cognito)"]
+            LoginBtn["Click 'Sign in with Cognito'"]:::action
+            Cognito["Cognito Hosted UI\noAuth2 PKCE redirect"]:::system
+            Callback["Callback — JWT stored\nuser auto-provisioned in DB"]:::system
+            LoginBtn --> Cognito --> Callback
+        end
 
-    Callback --> LoggedIn
+        Callback --> LoggedIn
 
-    subgraph LoggedIn["Authenticated User Flows"]
-        Search["Search for Deals\nPOST /search\nTavily + Bedrock"]:::page
-        Feed["Matched Deals Feed\nGET /watchlist/matches"]:::page
-        Prefs["Preferences\nSMS + email settings"]:::page
-    end
+        subgraph LoggedIn["Authenticated User Flows"]
+            Search["Search for Deals\nPOST /search\nTavily + Bedrock"]:::page
+            Feed["Matched Deals Feed\nGET /watchlist/matches"]:::page
+            Prefs["Preferences\nSMS + email settings"]:::page
+        end
 
-    Search -->|"Save to watchlist"| Feed
-    Feed -->|"System runs every 30 min"| Notify
-    Prefs -->|"Enable email / SMS"| Notify
+        Search -->|"Save to watchlist"| Feed
+        Feed -->|"System runs every 30 min"| Notify
+        Prefs -->|"Enable email / SMS"| Notify
 
-    Notify["Receive Notifications\n📧 Email via SES\n📱 SMS via SNS"]:::outcome
+        Notify["Receive Notifications\n📧 Email via SES\n📱 SMS via SNS"]:::outcome
 ```
 
 ---

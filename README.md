@@ -1,5 +1,15 @@
 # Deal Finder
 
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/release/python-3120/)
+[![React 19](https://img.shields.io/badge/react-19-61dafb.svg)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/typescript-%23007ACC.svg?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![AWS](https://img.shields.io/badge/AWS-Serverless-FF9900?logo=amazonaws)](https://aws.amazon.com/)
+[![Terraform](https://img.shields.io/badge/terraform-IaC-844FBA?logo=terraform)](https://www.terraform.io/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Backend CI](https://github.com/Bytes0211/dealfinder/actions/workflows/backend.yml/badge.svg)](https://github.com/Bytes0211/dealfinder/actions/workflows/backend.yml)
+[![Frontend CI](https://github.com/Bytes0211/dealfinder/actions/workflows/frontend.yml/badge.svg)](https://github.com/Bytes0211/dealfinder/actions/workflows/frontend.yml)
+
 > AI-Powered Deal Hunting Autonomous Agent System
 
 An intelligent multi-agent system that discovers online deals through RSS feeds, estimates prices using AWS Bedrock (Claude), and delivers real-time notifications for high-value opportunities. Built serverless on AWS by a solo developer.
@@ -296,7 +306,7 @@ The following were removed during the Feb 2026 scope revision to keep the projec
 
 ## License
 
-*To be determined*
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
 
 ---
 
