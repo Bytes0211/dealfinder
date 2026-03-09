@@ -191,17 +191,46 @@ Automate proactive discovery with Tavily + Bedrock trend extraction, dedupe noti
 
 ---
 
+## Session 15b – Match Card Border Fixes (Mar 8, 2026)
+
+### Scope
+Fix hot deal card orange borders not rendering, and investigate non-hot card border visibility.
+
+### Key Activities
+- Replaced CSS `:has(.deal-card--hot)` selector with direct `match-card--hot` class applied in `FeedPage.tsx` JSX — `:has()` was unreliable across browsers.
+- Iterated through multiple CSS approaches: `border-color` (overridden by dark mode), `border` shorthand with hardcoded color (still overridden), finally `outline: 2px solid #ff6b35` with `outline-offset: -2px` — this survived browser dark mode.
+- Non-hot card borders (`#bfc5cc` outline) still invisible in both light and dark mode despite same `outline` technique. Created issue `github/ISSUES/006-non-hot-deal-card-border-invisible.md`.
+- Cleaned up branches: merged PR #17, deleted `fix/match-card-borders` locally and on remote, reset local `main` to `origin/main`.
+- Deployed frontend to S3/CloudFront with invalidation; verified hot deal orange borders in light mode.
+
+### Files Changed
+- `frontend/src/index.css` — `.match-card` outline fallback, `.match-card.match-card--hot` outline rule
+- `frontend/src/pages/FeedPage.tsx` — conditional `match-card--hot` class on wrapper div
+- `github/ISSUES/006-non-hot-deal-card-border-invisible.md` — new issue
+
+### Validation
+- Visual verification in light mode: orange borders on all hot deal cards confirmed.
+- Dark mode: hot deal borders work; non-hot borders still invisible (deferred to issue #006).
+
+### Lessons
+- Browser automatic dark mode can override CSS `border` and `border-color` properties, even with hardcoded colors and high specificity. `outline` is more resilient.
+- CSS `:has()` selector is unreliable for cross-browser production use — prefer applying classes directly in JSX.
+- Gray-colored outlines may blend with browser-applied dark mode backgrounds; high-contrast colors (like orange) survive.
+
+---
+
 ## Testing & Quality Summary
 
 | Suite                                   | Command                            | Result          |
 |-----------------------------------------|------------------------------------|-----------------|
-| Core unit (agents, data, API, notif)    | `uv run pytest tests/unit -q`      | 224 passed, 41 skipped |
+| Core unit (agents, data, API, notif)    | `uv run pytest tests/unit -q`      | 317 passed, 41 skipped |
+| Regression (pipeline smoke)             | `uv run pytest tests/regression -q` | 3 passed        |
 | Integration (pipeline, notifications)   | `uv run pytest tests/integration -q` | 18 passed       |
 | Frontend unit                           | `npm run test`                     | All green       |
 | Terraform validation                    | `terraform fmt`, `validate`, `plan` | Clean           |
 | Manual smoke                            | Step Functions, SES, Tavily mocks  | Success         |
 
-> Last comprehensive test suite run: March 12, 2026 (`224 passed, 41 skipped`).
+> Last comprehensive test suite run: March 12, 2026 (`317 passed, 41 skipped; regression suite 3 passed`). Regression pipeline smoke suite (`uv run pytest tests/regression -q`) now runs as part of our release verification checklist.
 
 ---
 
