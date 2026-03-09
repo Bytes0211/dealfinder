@@ -8,7 +8,6 @@ from uuid import uuid4
 import boto3
 import pytest
 from moto import mock_aws
-from sqlalchemy import text
 
 from dealfinder.agents.config import AgentConfig
 from dealfinder.agents.evaluator import EvaluatorAgent
@@ -43,11 +42,11 @@ def _make_feed(*entries: dict) -> SimpleNamespace:
 
 
 def _build_agent_config(queue_url: str, discount_threshold: float = 20.0) -> AgentConfig:
-    config = AgentConfig()
-    config.notification_queue_url = queue_url
-    config.discount_threshold = discount_threshold
-    config.bedrock_region = "us-east-1"
-    return config
+    return AgentConfig(
+        notification_queue_url=queue_url,
+        discount_threshold=discount_threshold,
+        bedrock_region="us-east-1",
+    )
 
 
 def _prepare_source(session, name: str, url: str) -> DealSource:

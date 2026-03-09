@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import os
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator
 
 import pytest
 import pytest_asyncio
