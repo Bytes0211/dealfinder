@@ -278,4 +278,41 @@ git push feature-branch
 
 ---
 
-*Journal maintained and rewritten March 12, 2026 to summarize Phases 1–7.*
+---
+
+## Mothball – Full Infrastructure Teardown (Mar 10, 2026)
+
+### Scope
+Destroy all AWS resources to reduce cost to $0/mo. Project moving to mothballed state.
+
+### Key Activities
+- Reviewed AGENTS.md, developer journal, and Terraform configuration.
+- Disabled Aurora `deletion_protection` via targeted `terraform apply`.
+- Emptied S3 buckets: `dealfinder-prod-data-lake`, `dealfinder-prod-models`, `dealfinder-prod-backups`, `dealfinder-frontend-prod` (including all versioned objects and delete markers).
+- Ran `terraform destroy` — 139 resources destroyed (VPC, Aurora, DynamoDB, S3, Lambda ×5, Step Functions, SQS, SNS, API Gateway, Cognito, CloudWatch, NAT Gateway, security groups, IAM roles).
+- Aurora final snapshot created automatically (`dealfinder-prod-aurora-final-snapshot`).
+- Terraform state bucket (`dealfinder-terraform-state-prod`) and DynamoDB lock table preserved for future reactivation.
+- Updated AGENTS.md with mothballed status.
+- Reverted temporary `deletion_protection = false` change in `main.tf`.
+
+### What's Preserved
+- All source code, tests, Terraform modules, and IaC configuration
+- Terraform remote state (S3 + DynamoDB lock)
+- Aurora final snapshot
+- Git history and documentation
+
+### Reactivation Steps
+1. Review `infrastructure/environments/dev/variables.tf` feature flags
+2. Set sensitive variables (Aurora password, Tavily API key, etc.)
+3. `terraform -chdir=infrastructure/environments/dev apply`
+4. Run Alembic migrations: `./scripts/run-migrations-lambda.sh prod`
+5. Deploy API Lambda: `./scripts/deploy-api-lambda.sh prod`
+6. Deploy frontend: `cd frontend && npm run build` + push to trigger GitHub Actions
+
+### Cost Impact
+- Before: ~$420/mo estimated full-stack cost
+- After: $0/mo (only S3 state bucket ~$0.02/mo)
+
+---
+
+*Journal maintained and rewritten March 12, 2026 to summarize Phases 1–7. Updated March 10, 2026 for mothball teardown.*

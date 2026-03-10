@@ -6,19 +6,15 @@ This file provides guidance to AI assistants (Claude Code, Warp, etc.) when work
 
 Deal Finder is an AI-powered deal hunting system that discovers deals via RSS feeds, estimates prices using AWS Bedrock (Claude), and sends notifications for high-value opportunities. It's a serverless system on AWS, built by a solo developer.
 
-**Status:** Phase 7 complete and live in production. WatchlistAgent Lambda runs on a 30-minute EventBridge schedule, proactively discovering deals via Tavily search + Bedrock (Claude 3 Haiku) enrichment. SQLEnum casing bug and Bedrock Legacy model bug fixed (Session 12). Bedrock IAM policies updated to support cross-region inference profiles.
+**Status: MOTHBALLED (Mar 10, 2026).** All AWS infrastructure destroyed via `terraform destroy`. No running resources, $0/mo AWS cost. Terraform state bucket (`dealfinder-terraform-state-prod`) and DynamoDB lock table preserved for future reactivation. Aurora final snapshot created automatically.
 
-**Frontend (Session 13):** "Matched Deals" feed page (renamed from Feed) supports per-watchlist-entry filter toggle (client-side keyword filtering), scrollable deal grid with sticky watchlist section, and consistent page spacing across all pages. Sales Price, Out-of-Stock status displayed.
+**Phase 7 was the last active phase.** WatchlistAgent, pipeline, API, frontend, and all supporting infrastructure are fully torn down.
 
-**Frontend (Session 14):** Preferences page now has an "Email Notifications" section: shows the user's Cognito email address and an opt-in checkbox that sets `notification_preferences.email = true`. MessengerAgent gates all SES dispatch on this flag. SES sandbox: `cottonbytes@gmail.com` verified as a sending/receiving identity.
-
-**Session 15:** Deal cards now show `in_stock` (Out of Stock badge), trend fields from `raw_data`, sale prices, and short domain labels (e.g. "amazon · View Deal ↗"). Bedrock extraction prompt includes `in_stock` boolean. API Lambda granted `bedrock:InvokeModel` IAM (search was silently failing). Search route aligned with watchlist agent (`buy price` suffix, `exclude_domains`). Match-card border fix (single wrapper border with `overflow: hidden`). Fixed `.env.production` with correct Cognito/API Gateway URLs. Added Lambda logging setup (`logging.getLogger().setLevel`).
-
-**Session 15b (Mar 8, 2026):** Hot deal card orange border fix — replaced CSS `:has(.deal-card--hot)` selector with direct `match-card--hot` class on the wrapper div in `FeedPage.tsx`. Used `outline: 2px solid #ff6b35` (hardcoded, high specificity) instead of `border-color` to survive browser dark mode overrides. Non-hot card borders remain invisible in both light/dark mode — tracked in `github/ISSUES/006-non-hot-deal-card-border-invisible.md`.
+**To reactivate:** Run `terraform apply` in `infrastructure/environments/dev/`. Review feature flags in `variables.tf` before applying — start with minimal flags to control cost.
 
 **Bedrock model config:** All model IDs are centralised in `config/bedrock_models.json`. Edit that file to change models for all agents and Terraform modules at once. Per-Lambda overrides are still possible via the `DEALFINDER_BEDROCK_MODEL_ID` environment variable.
-**Current Bedrock model:** `anthropic.claude-3-haiku-20240307-v1:0` (on-demand, agreement accepted)
-**Upgrade path:** Accept Claude 3.5 Haiku agreement in Bedrock console → update `config/bedrock_models.json` to `us.anthropic.claude-3-5-haiku-20241022-v1:0` → redeploy
+**Last active Bedrock model:** `anthropic.claude-3-haiku-20240307-v1:0` (on-demand, agreement accepted)
+**Upgrade path (when reactivating):** Accept Claude 3.5 Haiku agreement in Bedrock console → update `config/bedrock_models.json` to `us.anthropic.claude-3-5-haiku-20241022-v1:0` → redeploy
 
 ## Architecture
 
