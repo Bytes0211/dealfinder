@@ -9,42 +9,42 @@ This document describes the complete user journey through the Deal Finder applic
 ## 1. User Journey Overview
 
 ```mermaid
-    flowchart TD
-        classDef page fill:#274060,stroke:#274060,color:#ffffff
-        classDef action fill:#335C81,stroke:#335C81,color:#ffffff
-        classDef outcome fill:#65AFFF,stroke:#274060,color:#1B2845
-        classDef system fill:#1B2845,stroke:#1B2845,color:#ffffff
+flowchart TD
+    classDef page fill:#274060,stroke:#274060,color:#ffffff
+    classDef action fill:#335C81,stroke:#335C81,color:#ffffff
+    classDef outcome fill:#65AFFF,stroke:#274060,color:#1B2845
+    classDef system fill:#1B2845,stroke:#1B2845,color:#ffffff
 
-        Visit["User visits app\n(CloudFront)"]:::page
+    Visit["User visits app\n(CloudFront)"]:::page
 
-        Visit --> Unauth
+    Visit --> Unauth
 
-        subgraph Unauth["Without Login"]
-            TopDeals["Browse Top Deals\n🔥 highest-discount deals\nsorted by % off"]:::page
-        end
+    subgraph Unauth["Without Login"]
+        TopDeals["Browse Top Deals\n🔥 highest-discount deals\nsorted by % off"]:::page
+    end
 
-        Visit --> Login
+    Visit --> Login
 
-        subgraph Login["Sign In (Cognito)"]
-            LoginBtn["Click 'Sign in with Cognito'"]:::action
-            Cognito["Cognito Hosted UI\noAuth2 PKCE redirect"]:::system
-            Callback["Callback — JWT stored\nuser auto-provisioned in DB"]:::system
-            LoginBtn --> Cognito --> Callback
-        end
+    subgraph Login["Sign In (Cognito)"]
+        LoginBtn["Click 'Sign in with Cognito'"]:::action
+        Cognito["Cognito Hosted UI\noAuth2 PKCE redirect"]:::system
+        Callback["Callback — JWT stored\nuser auto-provisioned in DB"]:::system
+        LoginBtn --> Cognito --> Callback
+    end
 
-        Callback --> LoggedIn
+    Callback --> LoggedIn
 
-        subgraph LoggedIn["Authenticated User Flows"]
-            Search["Search for Deals\nPOST /search\nTavily + Bedrock"]:::page
-            Feed["Matched Deals Feed\nGET /watchlist/matches"]:::page
-            Prefs["Preferences\nSMS + email settings"]:::page
-        end
+    subgraph LoggedIn["Authenticated User Flows"]
+        Search["Search for Deals\nPOST /search\nTavily + Bedrock"]:::page
+        Feed["Matched Deals Feed\nGET /watchlist/matches"]:::page
+        Prefs["Preferences\nSMS + email settings"]:::page
+    end
 
-        Search -->|"Save to watchlist"| Feed
-        Feed -->|"System runs every 30 min"| Notify
-        Prefs -->|"Enable email / SMS"| Notify
+    Search -->|"Save to watchlist"| Feed
+    Feed -->|"System runs every 30 min"| Notify
+    Prefs -->|"Enable email / SMS"| Notify
 
-        Notify["Receive Notifications\n📧 Email via SES\n📱 SMS via SNS"]:::outcome
+    Notify["Receive Notifications\n📧 Email via SES\n📱 SMS via SNS"]:::outcome
 ```
 
 ---
@@ -84,6 +84,7 @@ sequenceDiagram
 ```
 
 **Key points:**
+
 - Unauthenticated users can browse the **Top Deals** page without signing in.
 - On first login, the API auto-provisions a `User` row using the Cognito `sub` UUID as the primary key and the sign-in email from the JWT `username` claim.
 - Subsequent logins reuse the existing DB record — no duplicate provisioning.
@@ -199,9 +200,9 @@ flowchart TD
 
 Deals arrive from two sources, both visible in the same grid:
 
-| Source | How it gets there | Has trend data? |
-|--------|------------------|-----------------|
-| **RSS Pipeline** | Scanner finds deal in RSS feed → Evaluator prices it → `is_high_value=true` → notified via SQS | No |
+| Source             | How it gets there                                                                                    | Has trend data?      |
+| ------------------ | ---------------------------------------------------------------------------------------------------- | -------------------- |
+| **RSS Pipeline**   | Scanner finds deal in RSS feed → Evaluator prices it → `is_high_value=true` → notified via SQS       | No                   |
 | **WatchlistAgent** | Every 30 min: Tavily search per watchlist query → Bedrock enrichment → persisted as `EVALUATED` deal | Yes — 8 trend fields |
 
 The `last_scan_at` and `sources_scanned` values shown in the "no matches" state come from the most recent `DealSource.last_checked_at` across all active sources.
@@ -257,10 +258,10 @@ flowchart TD
 
 **Notification channel summary:**
 
-| Channel | Setup required | Delivery trigger | Dedup |
-|---------|---------------|-----------------|-------|
+| Channel     | Setup required                    | Delivery trigger                        | Dedup        |
+| ----------- | --------------------------------- | --------------------------------------- | ------------ |
 | Email (SES) | Enable toggle on Preferences page | High-value deal OR no-deals-feed update | 24h per deal |
-| SMS (SNS) | Enter E.164 phone number | High-value deal broadcast to SNS topic | 24h per deal |
+| SMS (SNS)   | Enter E.164 phone number          | High-value deal broadcast to SNS topic  | 24h per deal |
 
 ---
 
@@ -324,21 +325,23 @@ sequenceDiagram
 
 ## 7. Page Reference
 
-| Page | URL | Auth required | Purpose |
-|------|-----|---------------|---------|
-| Login | `/login` | No | Sign in via Cognito Hosted UI |
-| Top Deals | `/top` | No | Browse high-value deals sorted by discount |
-| Search | `/search` | No (save requires login) | Search + score deals, save to watchlist |
-| Feed (Matched Deals) | `/` | Yes | View watchlist + matched deals with trend data |
-| Preferences | `/preferences` | Yes | Enable email/SMS notifications, deactivate account |
-| Deal Detail | `/deals/:id` | No | Single deal detail view |
+| Page                 | URL            | Auth required            | Purpose                                            |
+| -------------------- | -------------- | ------------------------ | -------------------------------------------------- |
+| Login                | `/login`       | No                       | Sign in via Cognito Hosted UI                      |
+| Top Deals            | `/top`         | No                       | Browse high-value deals sorted by discount         |
+| Search               | `/search`      | No (save requires login) | Search + score deals, save to watchlist            |
+| Feed (Matched Deals) | `/`            | Yes                      | View watchlist + matched deals with trend data     |
+| Preferences          | `/preferences` | Yes                      | Enable email/SMS notifications, deactivate account |
+| Deal Detail          | `/deals/:id`   | No                       | Single deal detail view                            |
 
 ### What unauthenticated users can do
+
 - Browse **Top Deals** (RSS pipeline high-value deals, sorted by discount %)
 - Run searches on the **Search** page and view quality scores
 - Open any product URL directly from search results
 
 ### What requires login
+
 - Saving search results to a watchlist
 - Viewing the personalized **Matched Deals** feed
 - Configuring email or SMS notification preferences
