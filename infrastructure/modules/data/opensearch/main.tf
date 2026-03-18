@@ -200,7 +200,8 @@ resource "aws_opensearch_domain" "main" {
     "override_main_response_version"         = "false"
   }
 
-  # Access policy - allow access from VPC
+  # Access policy — VPC domains cannot use IP-based policies; access is
+  # controlled by security groups (network) + fine-grained access control (auth).
   access_policies = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -211,11 +212,6 @@ resource "aws_opensearch_domain" "main" {
         }
         Action   = "es:*"
         Resource = "arn:aws:es:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:domain/${local.domain_name}/*"
-        Condition = {
-          IpAddress = {
-            "aws:SourceIp" = var.vpc_cidr
-          }
-        }
       }
     ]
   })
