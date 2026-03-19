@@ -48,12 +48,7 @@ async def _call_tavily(query: str, max_results: int, api_key: str) -> list[dict]
                     "max_results": max_results,
                     "include_answer": False,
                     "include_raw_content": False,
-                    "exclude_domains": [
-                        "youtube.com",
-                        "reddit.com",
-                        "twitter.com",
-                        "facebook.com",
-                    ],
+                    "exclude_domains": config.exclude_domains,
                 },
             )
             response.raise_for_status()

@@ -169,12 +169,7 @@ class WatchlistAgent:
                         "max_results": 10,
                         "include_answer": False,
                         "include_raw_content": False,
-                        "exclude_domains": [
-                            "youtube.com",
-                            "reddit.com",
-                            "twitter.com",
-                            "facebook.com",
-                        ],
+                    "exclude_domains": self.config.exclude_domains,
                     },
                 )
                 response.raise_for_status()

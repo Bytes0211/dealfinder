@@ -46,6 +46,9 @@ class AgentConfig(BaseSettings):
         ses_sender_email (str): Verified SES sender address for email notifications.
         sns_topic_arn (str): ARN of the SNS topic for deal alert fan-out.
         dedup_table_name (str): DynamoDB table used for 24-hour notification deduplication.
+        exclude_domains (list[str]): Domains excluded from Tavily search results.
+            Override via ``DEALFINDER_EXCLUDE_DOMAINS`` as a JSON array, e.g.
+            ``'["youtube.com","reddit.com"]'``.
     """
 
     model_config = SettingsConfigDict(
@@ -60,6 +63,17 @@ class AgentConfig(BaseSettings):
     bedrock_model_id: str = _load_default_model_id()
     notification_queue_url: str = ""
     tavily_api_key: str = ""
+
+    # Tavily search filtering
+    exclude_domains: list[str] = [
+        "youtube.com",
+        "reddit.com",
+        "twitter.com",
+        "facebook.com",
+        "forums.woot.com",
+        "slickdeals.net",
+        "forum.redflagdeals.com",
+    ]
 
     # Messenger Agent fields
     ses_sender_email: str = ""
