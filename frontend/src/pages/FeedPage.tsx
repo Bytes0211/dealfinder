@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { DealCard } from '../components/DealCard';
 import { Pagination } from '../components/Pagination';
 import { useUserPreferences, useUpdatePreferences, useWatchlistMatches } from '../hooks';
-import { isAuthenticated, getUserId, login } from '../auth';
+import { isAuthenticated, getUserId } from '../auth';
 import type { SavedFeed, DealResponse } from '../api/types';
 
 const PAGE_SIZE = 20;
@@ -93,7 +93,6 @@ export function FeedPage() {
     return (
       <div className="page page--centered">
         <p className="state-msg">Log in to see your watchlist and deal matches.</p>
-        <button onClick={login} className="btn btn-primary">Log in</button>
       </div>
     );
   }

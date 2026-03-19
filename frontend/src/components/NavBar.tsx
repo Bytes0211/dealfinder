@@ -18,17 +18,15 @@ export function NavBar() {
         <Link to="/" className={pathname === '/' ? 'active' : ''}>Matched Deals</Link>
         <Link to="/search" className={pathname === '/search' ? 'active' : ''}>Search</Link>
         <Link to="/top" className={pathname === '/top' ? 'active' : ''}>Top Deals</Link>
-        {authed && (
-          <Link to="/preferences" className={pathname === '/preferences' ? 'active' : ''}>
-            Preferences
-          </Link>
-        )}
-      </div>
-      <div className="navbar-auth">
         {authed ? (
-          <button onClick={logout} className="btn btn-outline">Log out</button>
+          <>
+            <Link to="/preferences" className={pathname === '/preferences' ? 'active' : ''}>
+              Preferences
+            </Link>
+            <button onClick={logout} className="btn btn-outline btn-sm">Log out</button>
+          </>
         ) : (
-          <button onClick={login} className="btn btn-primary">Log in</button>
+          <button onClick={login} className="btn btn-primary btn-sm">Log in</button>
         )}
       </div>
     </nav>
