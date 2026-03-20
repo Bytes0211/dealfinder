@@ -19,14 +19,6 @@ An intelligent multi-agent system that discovers online deals through RSS feeds,
 ![screenshot](dealfinder-screenshot.jpg)
 
 
-## Project Status
-
-**Current Phase:** Phase 7 Complete — WatchlistAgent + React Frontend Live in Production
-
-**Scope:** 7 phases | Serverless-first | Target cost: $200-500/month
-
-See [developer/project-status.md](developer/project-status.md) for detailed tracking.
-
 ## Architecture
 
 ```

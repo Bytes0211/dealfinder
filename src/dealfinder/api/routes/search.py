@@ -22,13 +22,16 @@ router = APIRouter(prefix="/search", tags=["search"])
 _TAVILY_API_URL = "https://api.tavily.com/search"
 
 
-async def _call_tavily(query: str, max_results: int, api_key: str) -> list[dict]:
+async def _call_tavily(
+    query: str, max_results: int, api_key: str, exclude_domains: list[str]
+) -> list[dict]:
     """Call the Tavily Search API and return raw results.
 
     Args:
         query: Search query string.
         max_results: Maximum number of results to return.
         api_key: Tavily API key.
+        exclude_domains: List of domains to exclude from results.
 
     Returns:
         List of raw Tavily result dicts (title, url, content, score).
@@ -48,7 +51,7 @@ async def _call_tavily(query: str, max_results: int, api_key: str) -> list[dict]
                     "max_results": max_results,
                     "include_answer": False,
                     "include_raw_content": False,
-                    "exclude_domains": config.exclude_domains,
+                    "exclude_domains": exclude_domains,
                 },
             )
             response.raise_for_status()
@@ -99,7 +102,7 @@ async def search_deals(body: SearchRequest) -> SearchResponse:
         )
 
     # Step 1: Tavily search
-    raw_results = await _call_tavily(body.query, body.max_results, api_key)
+    raw_results = await _call_tavily(body.query, body.max_results, api_key, config.exclude_domains)
 
     if not raw_results:
         return SearchResponse(query=body.query, results=[])

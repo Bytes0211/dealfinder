@@ -5,6 +5,17 @@ import { useSearch, useUpdatePreferences, useUserPreferences } from '../hooks';
 import { isAuthenticated, getUserId } from '../auth';
 import type { SavedFeed, SearchResult } from '../api/types';
 
+/** Extract short domain label from a URL, e.g. "Amazon" from "https://www.amazon.com/..." */
+function shortDomain(url: string): string | null {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, '');
+    const name = host.split('.')[0] || null;
+    return name ? name.charAt(0).toUpperCase() + name.slice(1) : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Returns a quality badge emoji + label based on the 0–10 score. */
 function QualityBadge({ score }: { score: number }) {
   if (score >= 8) {
@@ -180,6 +191,7 @@ export function SearchPage() {
               <tr>
                 <th></th>
                 <th>Feed</th>
+                <th>Source</th>
                 <th>Description</th>
                 <th>Quality Score</th>
                 <th></th>
@@ -207,6 +219,14 @@ export function SearchPage() {
                       <a href={result.url} target="_blank" rel="noopener noreferrer">
                         {result.title}
                       </a>
+                    </td>
+
+                    <td className="search-row-source">
+                      {shortDomain(result.url) && (
+                        <a href={result.url} target="_blank" rel="noopener noreferrer" className="deal-card-domain">
+                          {shortDomain(result.url)}
+                        </a>
+                      )}
                     </td>
 
                     <td className="search-row-desc">
