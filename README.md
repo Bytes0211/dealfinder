@@ -239,13 +239,14 @@ uv run pytest tests/ --cov=src --cov-report=html
 
 ## Cost Management
 
-Feature flags keep idle dev costs at ~$4-10/month:
+Current production cost with all services enabled (Aurora + NAT GW + OpenSearch + CloudFront): **~$300-700/month**.
+
+Feature flags to reduce costs:
 
 - `enable_nat_gateway`: false (saves ~$100/month)
 - `enable_aurora`: false (saves $50-100/month)
-- `enable_opensearch`: false (saves $25-75/month)
-
-**Production target:** $200-500/month
+- `enable_opensearch`: false (saves $300-500/month)
+- `enable_frontend`: false (saves ~$5-15/month)
 
 ## Roadmap
 

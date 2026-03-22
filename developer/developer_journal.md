@@ -315,4 +315,57 @@ Destroy all AWS resources to reduce cost to $0/mo. Project moving to mothballed 
 
 ---
 
-*Journal maintained and rewritten March 12, 2026 to summarize Phases 1–7. Updated March 10, 2026 for mothball teardown.*
+## Reactivation — Full Stack Restore + Improvements (Mar 18–20, 2026)
+
+### Scope
+Bring DealFinder back online from mothballed state. Fresh database, all services enabled (including OpenSearch). Apply post-reactivation improvements.
+
+### Infrastructure Reactivation (Mar 18)
+- `terraform apply` — 156 AWS resources created: VPC, Aurora Serverless v2, OpenSearch (m6g.large.search ×2), NAT Gateway, 6 Lambdas, Step Functions, SQS/DLQ, SNS, API Gateway HTTP API v2, Cognito, CloudFront, S3, DynamoDB, CloudWatch.
+- **OpenSearch VPC policy fix:** Initial apply failed with `InvalidTypeException` — AWS rejects IP-based access policies on VPC-enabled domains. Removed `IpAddress` condition from `infrastructure/modules/data/opensearch/main.tf`; re-applied successfully on `fix/opensearch-vpc-access-policy` branch.
+- Deployed all 6 Lambda functions via `./scripts/deploy-lambda.sh prod` (39MB package).
+- Ran all 8 Alembic migrations on fresh Aurora cluster via `./scripts/run-migrations-lambda.sh prod`.
+- Updated `frontend/.env.production` with new API Gateway, Cognito, and CloudFront endpoints.
+- Built and deployed frontend to S3; CloudFront invalidation.
+- Verified: API health endpoint 200 OK, CloudFront serving React app 200.
+
+### Configuration Improvements (Mar 19)
+- **Configurable `exclude_domains`:** Moved hardcoded Tavily `exclude_domains` list from `watchlist.py` and `search.py` into `AgentConfig.exclude_domains`. Overridable via `DEALFINDER_EXCLUDE_DOMAINS` env var (JSON array).
+- Default list: `youtube.com`, `reddit.com`, `twitter.com`, `facebook.com`, `forums.woot.com`, `slickdeals.net`, `forum.redflagdeals.com`.
+- **Bug fix:** `_call_tavily()` in `search.py` referenced `config` variable out of scope — added `exclude_domains` as a function parameter. Verified fix via live API test (10 results, all retail sites, no excluded domains).
+- Redeployed API and watchlist Lambdas.
+
+### Frontend UI Improvements (Mar 19–20)
+- Removed duplicate login button from FeedPage (kept NavBar login only).
+- Moved NavBar login/logout button into `navbar-links` div (next to Top Deals) for consistent positioning.
+- Removed unused `login` import from FeedPage (fixed TypeScript build error).
+- Added **Source** column to SearchPage results table — extracts capitalized domain label from URL (e.g. "Amazon", "Walmart") using `shortDomain()` helper, consistent with DealCard display.
+- Customized Cognito Hosted UI CSS via `set-ui-customization` — consistent dark background (`background-customizable`, `banner-customizable`) to eliminate gray side panels.
+
+### GitHub Actions (Mar 19)
+- Frontend deploy workflow failed due to stale GitHub Actions secrets (old CloudFront distribution ID). Updated secrets: `CLOUDFRONT_DISTRIBUTION_ID`, `FRONTEND_BUCKET_NAME`, `VITE_API_BASE_URL`, `VITE_COGNITO_CLIENT_ID`, `VITE_COGNITO_REDIRECT_URI`.
+
+### Files Changed
+- `infrastructure/modules/data/opensearch/main.tf` — removed IpAddress condition from access policy
+- `src/dealfinder/agents/config.py` — added `exclude_domains: list[str]` field
+- `src/dealfinder/agents/watchlist.py` — uses `self.config.exclude_domains`
+- `src/dealfinder/api/routes/search.py` — `_call_tavily()` takes `exclude_domains` param
+- `frontend/.env.production` — updated all endpoints
+- `frontend/src/pages/FeedPage.tsx` — removed duplicate login button, unused import
+- `frontend/src/pages/SearchPage.tsx` — added Source column with `shortDomain()` helper
+- `frontend/src/components/NavBar.tsx` — moved login/logout into navbar-links
+
+### Known Issues
+- **Aurora snapshot name conflict:** `final_snapshot_identifier` in Terraform is `dealfinder-prod-aurora-final-snapshot`, which already exists from the mothball. A future `terraform destroy` will fail unless the old snapshot is deleted or the identifier renamed.
+- **SES still in sandbox mode:** Only verified recipients can receive emails.
+- **OpenSearch password:** Generated at apply time and stored in `/tmp/dealfinder_os_master_pass` (session-only). Must be saved securely or added to `terraform.tfvars` as `opensearch_master_user_password`.
+
+### Lessons
+- AWS OpenSearch rejects IP-based access policies on VPC-enabled domains — rely on security groups + fine-grained access control instead.
+- Vite bakes env vars at build time — after changing `.env.production`, the frontend must be rebuilt and redeployed.
+- When extracting hardcoded config into `pydantic_settings`, verify all call sites receive the config object (standalone helper functions won't have access to outer scope variables).
+- GitHub Actions secrets must be updated after infrastructure recreation — resource IDs (CloudFront distribution, Cognito client) change with each `terraform apply`.
+
+---
+
+*Journal maintained and rewritten March 12, 2026 to summarize Phases 1–7. Updated March 10, 2026 for mothball teardown. Updated March 21, 2026 for reactivation.*

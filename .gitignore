@@ -156,6 +156,7 @@ site/
 # Developer Documents
 developer/
 github/
+AGENTS.md
 
 # CDK
 .cdk.staging/
