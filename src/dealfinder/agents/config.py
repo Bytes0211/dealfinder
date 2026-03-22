@@ -73,6 +73,7 @@ class AgentConfig(BaseSettings):
         "forums.woot.com",
         "slickdeals.net",
         "forum.redflagdeals.com",
+        "zdnet.com",
     ]
 
     # Messenger Agent fields
