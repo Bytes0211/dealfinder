@@ -44,12 +44,22 @@ cd "${BUILD_DIR}/package"
 zip -r "${ZIP_PATH}" . -x "*.pyc" -x "*/__pycache__/*" > /dev/null
 echo "   Size: $(du -sh "${ZIP_PATH}" | cut -f1)"
 
+# Upload zip to S3 first (avoids direct-upload timeouts for large packages),
+# then update Lambda from S3.
+S3_BUCKET="dealfinder-prod-backups"
+S3_KEY="lambda-deploys/${FUNCTION_NAME}/lambda.zip"
+
+echo ""
+echo "▶ Uploading zip to s3://${S3_BUCKET}/${S3_KEY}..."
+aws s3 cp "${ZIP_PATH}" "s3://${S3_BUCKET}/${S3_KEY}" --no-cli-pager
+
 # Deploy to Lambda
 echo ""
-echo "▶ Updating Lambda function code..."
+echo "▶ Updating Lambda function code from S3..."
 aws lambda update-function-code \
     --function-name "${FUNCTION_NAME}" \
-    --zip-file "fileb://${ZIP_PATH}" \
+    --s3-bucket "${S3_BUCKET}" \
+    --s3-key "${S3_KEY}" \
     --no-cli-pager \
     --query '{FunctionName: FunctionName, CodeSize: CodeSize, LastModified: LastModified}'
 

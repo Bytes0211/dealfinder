@@ -157,7 +157,7 @@ site/
 developer/
 github/
 AGENTS.md
-
+CLAUDE.md
 # CDK
 .cdk.staging/
 cdk.out/
