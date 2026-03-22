@@ -320,8 +320,9 @@ class BedrockSearchExtractor:
             "For each result return:\n"
             "- title: Clean product name (remove store names and marketing filler)\n"
             "- url: The product URL exactly as provided\n"
-            '- current_price: Current sale price as a string (e.g. "$279.99") or null if not found. '
-            "If multiple prices are listed, use the lowest retail price.\n"
+            '- current_price: The primary product\'s current retail price as a string (e.g. "$279.99") or null if not found. '
+            "Ignore accessory prices, coupon discounts, add-on items, and prices for unrelated products. "
+            "If the listing shows a crossed-out original price and a sale price, use the sale price.\n"
             "- in_stock: true if the product appears to be available/in stock, false if out of stock or unavailable\n"
             "- quality_score: Float 0.0\u201310.0 rating the deal quality\n"
             "  (10 = exceptional value vs typical retail, 0 = poor value or no deal)\n"

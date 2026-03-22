@@ -6,6 +6,7 @@ deal persistence logic without network or real AWS dependencies.
 
 import hashlib
 import json
+from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -13,6 +14,7 @@ from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
+from dealfinder.agents.bedrock import PriceEstimationResult
 from dealfinder.agents.config import AgentConfig
 from dealfinder.agents.watchlist import WatchlistAgent, _normalize_query, _watchlist_url
 from dealfinder.data.repository import UserRepository
@@ -131,6 +133,18 @@ def _make_bedrock_results(urls: list[str], include_trends: bool = False) -> list
     return results
 
 
+def _make_price_estimation(estimated_price: str = "349.99", confidence: str = "0.85") -> PriceEstimationResult:
+    """Build a PriceEstimationResult for mocking BedrockPriceEstimator."""
+    return PriceEstimationResult(
+        estimated_price=Decimal(estimated_price),
+        confidence=Decimal(confidence),
+        range_low=None,
+        range_high=None,
+        model_id="test-model",
+        inference_time_ms=100,
+    )
+
+
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
 
@@ -211,6 +225,8 @@ class TestWatchlistAgentSearchQuery:
     ) -> None:
         """New Tavily results should be persisted with trend fields stored in raw_data."""
         agent = WatchlistAgent(config=config)
+        agent._estimator = MagicMock()
+        agent._estimator.estimate_price.return_value = _make_price_estimation()
         urls = ["https://amazon.com/dp/B001", "https://bestbuy.com/p/12345"]
         tavily_results = _make_tavily_results(urls)
         bedrock_results = _make_bedrock_results(urls, include_trends=True)
@@ -232,12 +248,15 @@ class TestWatchlistAgentSearchQuery:
             assert deal.raw_data["trend_confidence"] == 0.85
             assert deal.raw_data["review_velocity"] == "high"
             assert deal.raw_data["trend_summary"] == "Strong demand with low discount frequency."
+            assert "price_sanity_check" in deal.raw_data
 
     async def test_deduplication_skips_existing_deals(
         self, session: AsyncSession, config: AgentConfig
     ) -> None:
         """A second search_query call with the same URL should not create a duplicate deal."""
         agent = WatchlistAgent(config=config)
+        agent._estimator = MagicMock()
+        agent._estimator.estimate_price.return_value = _make_price_estimation()
         urls = ["https://amazon.com/dp/DEDUP001"]
         tavily_results = _make_tavily_results(urls)
         bedrock_results = _make_bedrock_results(urls)
@@ -292,6 +311,117 @@ class TestWatchlistAgentSearchQuery:
 
         # Fallback results have current_price=None, so all deals are skipped
         assert len(new_deals) == 0
+
+
+class TestWatchlistPriceSanityCheck:
+    """Tests for WatchlistAgent._sanity_check_price."""
+
+    async def test_suspicious_price_demoted_to_non_high_value(
+        self, session: AsyncSession, config: AgentConfig
+    ) -> None:
+        """Deal with sale_price < 20% of estimated price should be flagged as suspicious."""
+        agent = WatchlistAgent(config=config)
+        # Estimated price $1500, sale price $299.99 → ratio ≈ 0.20, but let's make
+        # the estimated price much higher so ratio < 0.20.
+        agent._estimator = MagicMock()
+        agent._estimator.estimate_price.return_value = _make_price_estimation(
+            estimated_price="1999.99"
+        )
+        urls = ["https://amazon.com/dp/SUSPICIOUS001"]
+        tavily_results = _make_tavily_results(urls)
+        bedrock_results = _make_bedrock_results(urls)  # current_price=$299.99, quality=8.0
+
+        with patch.object(agent, "_call_tavily", new_callable=AsyncMock, return_value=tavily_results), \
+             patch("dealfinder.agents.watchlist.BedrockSearchExtractor") as MockExtractor:
+            mock_extractor = MagicMock()
+            mock_extractor.extract.return_value = bedrock_results
+            MockExtractor.return_value = mock_extractor
+
+            new_deals = await agent.search_query("overpriced item", session)
+
+        assert len(new_deals) == 1
+        deal = new_deals[0]
+        assert deal.is_high_value is False
+        assert deal.raw_data["price_sanity_check"]["suspicious"] is True
+        assert deal.raw_data["price_sanity_check"]["estimated_price"] == 1999.99
+
+    async def test_legitimate_deal_passes_sanity_check(
+        self, session: AsyncSession, config: AgentConfig
+    ) -> None:
+        """Deal with a reasonable sale-to-estimated ratio passes sanity check."""
+        agent = WatchlistAgent(config=config)
+        agent._estimator = MagicMock()
+        agent._estimator.estimate_price.return_value = _make_price_estimation(
+            estimated_price="349.99"
+        )
+        urls = ["https://amazon.com/dp/LEGIT001"]
+        tavily_results = _make_tavily_results(urls)
+        bedrock_results = _make_bedrock_results(urls)  # current_price=$299.99, quality=8.0
+
+        with patch.object(agent, "_call_tavily", new_callable=AsyncMock, return_value=tavily_results), \
+             patch("dealfinder.agents.watchlist.BedrockSearchExtractor") as MockExtractor:
+            mock_extractor = MagicMock()
+            mock_extractor.extract.return_value = bedrock_results
+            MockExtractor.return_value = mock_extractor
+
+            new_deals = await agent.search_query("good deal", session)
+
+        assert len(new_deals) == 1
+        deal = new_deals[0]
+        assert deal.is_high_value is True
+        assert "price_sanity_check" in deal.raw_data
+        assert "suspicious" not in deal.raw_data["price_sanity_check"]
+
+    async def test_sanity_check_failure_keeps_high_value(
+        self, session: AsyncSession, config: AgentConfig
+    ) -> None:
+        """When BedrockPriceEstimator raises, the deal should keep is_high_value=True."""
+        agent = WatchlistAgent(config=config)
+        agent._estimator = MagicMock()
+        agent._estimator.estimate_price.side_effect = RuntimeError("Bedrock unavailable")
+        urls = ["https://amazon.com/dp/FAILCHECK001"]
+        tavily_results = _make_tavily_results(urls)
+        bedrock_results = _make_bedrock_results(urls)  # quality_score=8.0 → high_value
+
+        with patch.object(agent, "_call_tavily", new_callable=AsyncMock, return_value=tavily_results), \
+             patch("dealfinder.agents.watchlist.BedrockSearchExtractor") as MockExtractor:
+            mock_extractor = MagicMock()
+            mock_extractor.extract.return_value = bedrock_results
+            MockExtractor.return_value = mock_extractor
+
+            new_deals = await agent.search_query("estimator fails", session)
+
+        assert len(new_deals) == 1
+        assert new_deals[0].is_high_value is True
+        assert "price_sanity_check" not in new_deals[0].raw_data
+
+    async def test_low_quality_deal_skips_sanity_check(
+        self, session: AsyncSession, config: AgentConfig
+    ) -> None:
+        """Deals with quality_score < 7.0 should not trigger the sanity check."""
+        agent = WatchlistAgent(config=config)
+        agent._estimator = MagicMock()
+        urls = ["https://amazon.com/dp/LOWQ001"]
+        tavily_results = _make_tavily_results(urls)
+        bedrock_results = [{
+            "title": "Low quality deal",
+            "url": urls[0],
+            "current_price": "$49.99",
+            "quality_score": 4.0,
+            "quality_reason": "Mediocre value",
+        }]
+
+        with patch.object(agent, "_call_tavily", new_callable=AsyncMock, return_value=tavily_results), \
+             patch("dealfinder.agents.watchlist.BedrockSearchExtractor") as MockExtractor:
+            mock_extractor = MagicMock()
+            mock_extractor.extract.return_value = bedrock_results
+            MockExtractor.return_value = mock_extractor
+
+            new_deals = await agent.search_query("low quality", session)
+
+        assert len(new_deals) == 1
+        assert new_deals[0].is_high_value is False
+        agent._estimator.estimate_price.assert_not_called()
 
 
 class TestWatchlistAgentHandler:

@@ -25,7 +25,7 @@ logging.getLogger().setLevel(
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from dealfinder.agents.bedrock import BedrockSearchExtractor
+from dealfinder.agents.bedrock import BedrockPriceEstimator, BedrockSearchExtractor
 from dealfinder.agents.config import AgentConfig
 from dealfinder.data.repository import DealRepository, DealSourceRepository, UserRepository
 from dealfinder.db.connection import get_async_session
@@ -85,6 +85,11 @@ def _parse_price(value: str | None) -> Decimal | None:
         return None
 
 
+# Deals where sale_price < this fraction of the Bedrock-estimated market price
+# are flagged as suspicious (likely a mis-extracted price) rather than high-value.
+_SUSPICIOUS_PRICE_RATIO = Decimal("0.20")
+
+
 class WatchlistAgent:
     """Scheduled Lambda agent that discovers deals from user watchlist queries.
 
@@ -93,7 +98,10 @@ class WatchlistAgent:
     1. Finds or creates a ``DealSource`` with ``url = watchlist://<query>``.
     2. Calls Tavily to search the web for the query.
     3. Enriches results with ``BedrockSearchExtractor`` (quality score + trend analysis).
-    4. Persists new deals (deduped by source + sha256(url)) to Aurora.
+    4. Runs ``BedrockPriceEstimator`` on would-be high-value deals to sanity-check
+       the extracted price. Deals where the sale price is < 20% of the estimated
+       market price are flagged as suspicious rather than high-value.
+    5. Persists new deals (deduped by source + sha256(url)) to Aurora.
 
     The ``watchlist/matches`` API endpoint picks up these deals via the existing
     ILIKE keyword matching on deal titles — no API changes required.
@@ -111,6 +119,7 @@ class WatchlistAgent:
             config: Agent configuration. Loaded from environment if not provided.
         """
         self.config = config or AgentConfig()
+        self._estimator = BedrockPriceEstimator(self.config)
 
     async def _get_or_create_source(self, query: str, session: AsyncSession) -> DealSource:
         """Find an existing DealSource for this query or create a new one.
@@ -247,6 +256,16 @@ class WatchlistAgent:
             if sale_price is None:
                 continue
 
+            # Sanity-check: run BedrockPriceEstimator on would-be high-value
+            # deals and flag as suspicious if sale_price < 20% of estimated
+            # market price (likely a mis-extracted accessory/coupon price).
+            if is_high_value:
+                is_high_value, result = await self._sanity_check_price(
+                    title=(result.get("title") or query)[:500],
+                    sale_price=sale_price,
+                    result=result,
+                )
+
             deal = Deal(
                 source_id=source.id,
                 external_id=external_id,
@@ -270,6 +289,70 @@ class WatchlistAgent:
             await source_repo.update_check_time(source.id, success=True)
         except Exception as exc:
             logger.warning("Failed to update check time for source '%s': %s", query, exc)
+
+        logger.info("Query '%s': %d new deals discovered", query, len(new_deals))
+        return new_deals
+
+    async def _sanity_check_price(
+        self,
+        title: str,
+        sale_price: Decimal,
+        result: dict,
+    ) -> tuple[bool, dict]:
+        """Run BedrockPriceEstimator and flag suspicious prices.
+
+        If the sale price is less than 20% of the Bedrock-estimated market price,
+        the deal is flagged as suspicious (``is_high_value=False``) and the
+        estimation data is stored in ``result["price_sanity_check"]``.
+
+        Args:
+            title: Clean product title.
+            sale_price: Extracted sale price.
+            result: Enriched result dict (mutated in-place with sanity-check data).
+
+        Returns:
+            Tuple of (is_high_value, result). ``is_high_value`` is False if the
+            deal looks suspicious; ``result`` is updated with estimation metadata.
+        """
+        loop = asyncio.get_running_loop()
+        try:
+            estimation = await loop.run_in_executor(
+                None,
+                lambda: self._estimator.estimate_price(
+                    title=title,
+                    sale_price=sale_price,
+                ),
+            )
+        except Exception as exc:
+            logger.warning(
+                "Price sanity check failed for '%s': %s — keeping is_high_value",
+                title[:80],
+                exc,
+            )
+            return True, result
+
+        estimated = estimation.estimated_price
+        ratio = sale_price / estimated if estimated > 0 else Decimal("1")
+
+        result["price_sanity_check"] = {
+            "estimated_price": float(estimated),
+            "confidence": float(estimation.confidence),
+            "sale_to_estimated_ratio": float(ratio.quantize(Decimal("0.01"))),
+        }
+
+        if ratio < _SUSPICIOUS_PRICE_RATIO:
+            logger.warning(
+                "Suspicious price for '%s': sale $%s vs estimated $%s (ratio %.2f) "
+                "— demoting to non-high-value",
+                title[:80],
+                sale_price,
+                estimated,
+                ratio,
+            )
+            result["price_sanity_check"]["suspicious"] = True
+            return False, result
+
+        return True, result
 
         logger.info("Query '%s': %d new deals discovered", query, len(new_deals))
         return new_deals
