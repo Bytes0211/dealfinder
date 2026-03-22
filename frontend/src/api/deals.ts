@@ -8,8 +8,12 @@ export async function listDeals(filters: DealFilters = {}): Promise<DealListResp
 }
 
 /** GET /api/v1/deals/top — high-value deals sorted by discount. */
-export async function topDeals(limit = 20): Promise<DealResponse[]> {
-  const { data } = await apiClient.get<DealResponse[]>('/deals/top', { params: { limit } });
+export async function topDeals(limit = 20, minDiscount?: number): Promise<DealResponse[]> {
+  const params: Record<string, number> = { limit };
+  if (minDiscount != null && minDiscount > 0) {
+    params.min_discount = minDiscount;
+  }
+  const { data } = await apiClient.get<DealResponse[]>('/deals/top', { params });
   return data;
 }
 

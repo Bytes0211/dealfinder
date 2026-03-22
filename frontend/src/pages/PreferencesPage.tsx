@@ -19,6 +19,7 @@ export function PreferencesPage() {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [phoneError, setPhoneError] = useState('');
   const [emailEnabled, setEmailEnabled] = useState(false);
+  const [minDiscount, setMinDiscount] = useState(20);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteMsg, setDeleteMsg] = useState('');
 
@@ -27,6 +28,8 @@ export function PreferencesPage() {
     if (!existing) return;
     if (existing.phone_number) setPhoneNumber(existing.phone_number);
     setEmailEnabled(existing.notification_preferences?.email === true);
+    const saved = existing.notification_preferences?.min_discount_percentage;
+    if (typeof saved === 'number') setMinDiscount(saved);
   }, [existing]);
 
   function handleSubmit(e: React.FormEvent) {
@@ -39,7 +42,7 @@ export function PreferencesPage() {
     }
     mutate({
       phone_number: phone || null,
-      notification_preferences: { email: emailEnabled },
+      notification_preferences: { email: emailEnabled, min_discount_percentage: minDiscount },
     });
   }
 
@@ -73,6 +76,30 @@ export function PreferencesPage() {
             onChange={(e) => setEmailEnabled(e.target.checked)}
           />
           Enable email notifications
+        </label>
+      </section>
+
+      {/* ──── Top Deals Threshold */}
+      <section className="pref-section">
+        <h2>Top Deals Threshold</h2>
+        <p className="section-subtitle">
+          Only show deals on the Top Deals page with at least this discount percentage.
+        </p>
+        <label className="form-label">
+          Minimum discount: <strong>{minDiscount}%</strong>
+          <input
+            type="range"
+            min={0}
+            max={80}
+            step={5}
+            value={minDiscount}
+            onChange={(e) => setMinDiscount(Number(e.target.value))}
+            className="form-range"
+          />
+          <span className="range-labels">
+            <span>0%</span>
+            <span>80%</span>
+          </span>
         </label>
       </section>
 
