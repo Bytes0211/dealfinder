@@ -6,13 +6,15 @@ import { isAuthenticated, getUserId } from '../auth';
 export function TopDealsPage() {
   const authed = isAuthenticated();
   const userId = getUserId() ?? '';
-  const { data: userPrefs } = useUserPreferences(authed ? userId : '');
+  const { data: userPrefs, isLoading: prefsLoading } = useUserPreferences(authed ? userId : '');
 
   const minDiscount = typeof userPrefs?.notification_preferences?.min_discount_percentage === 'number'
     ? (userPrefs.notification_preferences.min_discount_percentage as number)
     : undefined;
 
-  const { data, isLoading, isError } = useTopDeals(20, minDiscount);
+  const { data, isLoading, isError } = useTopDeals(20, minDiscount, {
+    enabled: !authed || !prefsLoading,
+  });
 
   return (
     <div className="page">

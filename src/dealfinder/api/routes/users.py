@@ -258,16 +258,25 @@ async def update_preferences(
     message: str | None = None
     removed_count = 0
     if body.saved_feeds is not None:
+        old_queries = {f.get("query", "").lower().strip() for f in old_feeds}
+        new_queries = {f.get("query", "").lower().strip() for f in prefs["saved_feeds"]}
+        added = new_queries - old_queries
+        removed = old_queries - new_queries
+
         removed_count = await _cleanup_orphaned_watchlist_deals(
             old_feeds=old_feeds,
-            new_feeds=[f.model_dump() for f in body.saved_feeds],
+            new_feeds=prefs["saved_feeds"],
             current_user_id=user_id,
             db=db,
         )
         if removed_count > 0:
             message = f"Feed removed. {removed_count} associated deal(s) cleaned up."
-        else:
+        elif removed:
+            message = "Feed removed."
+        elif added:
             message = "Feed saved. New deals matching your watchlist will trigger notifications."
+        else:
+            message = "Preferences updated."
 
     return PreferencesUpdateResponse(
         **UserResponse.model_validate(user).model_dump(),

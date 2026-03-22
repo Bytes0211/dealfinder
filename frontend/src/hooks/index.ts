@@ -12,10 +12,11 @@ export function useDeals(filters: DealFilters = {}, options?: { enabled?: boolea
   });
 }
 
-export function useTopDeals(limit = 20, minDiscount?: number) {
+export function useTopDeals(limit = 20, minDiscount?: number, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['deals', 'top', limit, minDiscount],
     queryFn: () => topDeals(limit, minDiscount),
+    enabled: options?.enabled,
   });
 }
 
