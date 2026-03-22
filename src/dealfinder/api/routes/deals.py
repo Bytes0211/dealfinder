@@ -95,24 +95,32 @@ async def list_deals(
 @router.get("/top", response_model=list[DealResponse], summary="Top high-value deals")
 async def top_deals(
     limit: int = Query(20, ge=1, le=100),
+    min_discount: Optional[float] = Query(
+        None, ge=0, le=100, description="Minimum discount percentage filter",
+    ),
     db: AsyncSession = Depends(get_db),
 ) -> list[DealResponse]:
     """Return high-value deals sorted by discount percentage descending.
 
     Args:
         limit: Maximum number of deals to return (default 20, max 100).
+        min_discount: Optional minimum discount percentage. When provided, only
+            deals with ``discount_percentage >= min_discount`` are returned.
         db: Injected database session.
 
     Returns:
         List of high-value deals sorted by discount percentage.
     """
-    result = await db.execute(
+    query = (
         select(Deal)
         .where(Deal.is_high_value == True)  # noqa: E712
-        .order_by(desc(Deal.discount_percentage))
-        .limit(limit)
         .options(selectinload(Deal.source))
     )
+    if min_discount is not None and min_discount > 0:
+        query = query.where(Deal.discount_percentage >= min_discount)
+    query = query.order_by(desc(Deal.discount_percentage)).limit(limit)
+
+    result = await db.execute(query)
     deals = result.scalars().all()
 
     return [

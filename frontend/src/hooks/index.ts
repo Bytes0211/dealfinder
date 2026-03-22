@@ -12,10 +12,11 @@ export function useDeals(filters: DealFilters = {}, options?: { enabled?: boolea
   });
 }
 
-export function useTopDeals(limit = 20) {
+export function useTopDeals(limit = 20, minDiscount?: number, options?: { enabled?: boolean }) {
   return useQuery({
-    queryKey: ['deals', 'top', limit],
-    queryFn: () => topDeals(limit),
+    queryKey: ['deals', 'top', limit, minDiscount],
+    queryFn: () => topDeals(limit, minDiscount),
+    enabled: options?.enabled,
   });
 }
 
@@ -43,6 +44,9 @@ export function useUpdatePreferences(userId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user', userId] });
       queryClient.invalidateQueries({ queryKey: ['watchlist-matches', userId] });
+      // Removing a watchlist feed deletes orphaned deals on the backend,
+      // so top deals and the main deals list must be refreshed.
+      queryClient.invalidateQueries({ queryKey: ['deals'] });
     },
   });
 }
