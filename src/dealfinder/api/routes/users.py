@@ -234,7 +234,7 @@ async def update_preferences(
     repo = UserRepository(db)
     user = await _get_or_provision_user(user_id, token_claims, repo)
 
-    # Snapshot current feeds before updating so we can detect removals
+    # Snapshot saved_feeds before updating so we can detect removals
     old_feeds: list[dict] = list(
         (user.notification_preferences or {}).get("saved_feeds", []) or []
     )
@@ -255,23 +255,31 @@ async def update_preferences(
     await db.flush()
     await db.refresh(user)
 
-    message: str | None = None
-    removed_count = 0
+    # Cleanup orphaned watchlist deals when feeds are removed
+    cleanup_count = 0
     if body.saved_feeds is not None:
-        old_queries = {f.get("query", "").lower().strip() for f in old_feeds}
-        new_queries = {f.get("query", "").lower().strip() for f in prefs["saved_feeds"]}
-        added = new_queries - old_queries
-        removed = old_queries - new_queries
+        old_queries = {
+            f.get("query", "").lower().strip()
+            for f in old_feeds
+            if f.get("query", "").strip()
+        }
+        new_queries = {
+            f.query.lower().strip()
+            for f in body.saved_feeds
+            if f.query.strip()
+        }
+        removed_queries = [q for q in old_queries - new_queries if q]
+        if removed_queries:
+            cleanup_count = await _cleanup_orphaned_watchlist_deals(
+                removed_queries, user_id, db,
+            )
 
-        removed_count = await _cleanup_orphaned_watchlist_deals(
-            old_feeds=old_feeds,
-            new_feeds=prefs["saved_feeds"],
-            current_user_id=user_id,
-            db=db,
-        )
-        if removed_count > 0:
-            message = f"Feed removed. {removed_count} associated deal(s) cleaned up."
-        elif removed:
+    message: str | None = None
+    if body.saved_feeds is not None:
+        added = new_queries - old_queries
+        if cleanup_count > 0:
+            message = f"Feed removed. {cleanup_count} associated deal(s) cleaned up."
+        elif removed_queries:
             message = "Feed removed."
         elif added:
             message = "Feed saved. New deals matching your watchlist will trigger notifications."
@@ -445,92 +453,88 @@ async def watchlist_matches(
 
 
 async def _cleanup_orphaned_watchlist_deals(
-    old_feeds: list[dict],
-    new_feeds: list[dict],
+    removed_queries: list[str],
     current_user_id: UUID,
     db: AsyncSession,
 ) -> int:
-    """Delete watchlist-sourced deals whose queries are no longer watched by any user.
+    """Delete deals from watchlist:// DealSources that no other active user references.
 
-    Compares old and new saved_feeds to find removed queries, then checks whether
-    any other active user still references each query.  If a query is orphaned,
-    all deals from the corresponding ``watchlist://`` DealSource are deleted.
+    For each removed query, checks whether any other active user still has the
+    same query in their saved_feeds.  If no other user references the query,
+    all deals linked to the corresponding ``watchlist://`` DealSource are deleted
+    and the source is deactivated.
 
     Args:
-        old_feeds: The user's saved_feeds list before the update.
-        new_feeds: The user's saved_feeds list after the update.
-        current_user_id: UUID of the user whose feeds changed.
+        removed_queries: Normalised query strings removed from the user's watchlist.
+        current_user_id: UUID of the user who removed the feeds.
         db: Active database session.
 
     Returns:
-        Total number of deals deleted.
+        Number of deals deleted.
     """
-    old_queries = {f.get("query", "").lower().strip() for f in old_feeds if f.get("query")}
-    new_queries = {f.get("query", "").lower().strip() for f in new_feeds if f.get("query")}
-    removed_queries = old_queries - new_queries
-
     if not removed_queries:
         return 0
 
-    # Check if any OTHER active user still references each removed query
+    deleted_count = 0
+
+    # Fetch all OTHER active users to check for shared queries
     other_users_result = await db.execute(
-        select(User.notification_preferences)
-        .where(
-            and_(
-                User.id != current_user_id,
-                User.is_active == True,  # noqa: E712
-            )
-        )
+        select(User)
+        .where(User.is_active == True, User.id != current_user_id)  # noqa: E712
     )
-    other_prefs = other_users_result.scalars().all()
+    other_users = other_users_result.scalars().all()
 
-    # Collect all queries still referenced by other users
-    still_watched: set[str] = set()
-    for prefs in other_prefs:
-        if not prefs:
+    # Collect all queries referenced by other active users
+    other_queries: set[str] = set()
+    for u in other_users:
+        feeds = (u.notification_preferences or {}).get("saved_feeds", []) or []
+        for feed in feeds:
+            q = feed.get("query", "").lower().strip()
+            if q:
+                other_queries.add(q)
+
+    for query in removed_queries:
+        normalized = query.lower().strip()
+        if not normalized:
             continue
-        for feed in prefs.get("saved_feeds", []) or []:
-            if isinstance(feed, dict) and feed.get("query"):
-                still_watched.add(feed["query"].lower().strip())
 
-    orphaned_queries = removed_queries - still_watched
-    if not orphaned_queries:
-        return 0
-
-    total_deleted = 0
-    for query in orphaned_queries:
-        watchlist_url = f"watchlist://{query}"
+        # If another user still watches this query, skip cleanup
+        if normalized in other_queries:
+            logger.info(
+                f"Skipping cleanup for watchlist query '{query}' — "
+                f"still referenced by another active user"
+            )
+            continue
 
         # Find the DealSource for this watchlist query
+        watchlist_url = f"watchlist://{normalized}"
         source_result = await db.execute(
-            select(DealSource.id).where(DealSource.url == watchlist_url)
+            select(DealSource).where(DealSource.url == watchlist_url)
         )
-        source_id = source_result.scalar_one_or_none()
-        if not source_id:
+        source = source_result.scalar_one_or_none()
+        if not source:
             continue
 
-        # Delete deals from this source (cascades to price_estimates, notifications)
-        del_result = await db.execute(
-            delete(Deal).where(Deal.source_id == source_id)
+        # Delete all deals from this source
+        deals_result = await db.execute(
+            select(Deal).where(Deal.source_id == source.id)
         )
-        deleted = del_result.rowcount
-        total_deleted += deleted
+        deals = deals_result.scalars().all()
+        for deal in deals:
+            await db.delete(deal)
+            deleted_count += 1
 
-        # Deactivate the orphaned DealSource
-        source_obj_result = await db.execute(
-            select(DealSource).where(DealSource.id == source_id)
-        )
-        source_obj = source_obj_result.scalar_one_or_none()
-        if source_obj:
-            source_obj.is_active = False
-
+        # Deactivate the source
+        source.is_active = False
         logger.info(
-            "Cleaned up %d deal(s) for orphaned watchlist query '%s'",
-            deleted,
-            query,
+            f"Cleaned up {len(deals)} orphaned deals from "
+            f"watchlist source '{query}' (source_id={source.id})"
         )
 
-    return total_deleted
+    if deleted_count:
+        await db.flush()
+
+    return deleted_count
 
 
 def _subscribe_phone_to_sns(phone_number: str) -> None:

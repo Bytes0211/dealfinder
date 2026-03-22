@@ -283,6 +283,143 @@ class TestGetOrProvisionUser:
         assert exc_info.value.status_code == 404
 
 
+# ─────────────────────────────────────────────
+# Watchlist-deal-cleanup fixtures
+# ─────────────────────────────────────────────
+
+
+@pytest.fixture
+async def watchlist_source_and_deal(session, user):
+    """Seed a watchlist DealSource + Deal, and pre-set the user's saved_feeds."""
+    from decimal import Decimal
+    from dealfinder.db.models import Deal, DealSource, DealStatus
+
+    user.notification_preferences = {
+        "saved_feeds": [
+            {
+                "id": "f-1",
+                "query": "sony headphones",
+                "title": "Sony WH-1000XM5",
+                "url": "https://example.com/sony",
+                "saved_at": "2026-03-20T00:00:00Z",
+            }
+        ]
+    }
+    src = DealSource(
+        name="sony headphones",
+        url="watchlist://sony headphones",
+        is_active=True,
+    )
+    session.add(src)
+    await session.flush()
+    await session.refresh(src)
+    deal = Deal(
+        source_id=src.id,
+        external_id="wl-001",
+        title="Sony WH-1000XM5",
+        url="https://example.com/sony",
+        is_high_value=True,
+        status=DealStatus.EVALUATED,
+    )
+    session.add(deal)
+    await session.commit()
+    await session.refresh(src)
+    await session.refresh(deal)
+    return {"source": src, "deal": deal}
+
+
+@pytest.fixture
+async def watchlist_shared_by_other_user(session, user):
+    """Seed a shared watchlist query: two users watch 'sony headphones'."""
+    import bcrypt
+    from decimal import Decimal
+    from dealfinder.db.models import Deal, DealSource, DealStatus, User
+
+    # Current user has the feed
+    user.notification_preferences = {
+        "saved_feeds": [
+            {
+                "id": "f-1",
+                "query": "sony headphones",
+                "title": "Sony WH-1000XM5",
+                "url": "https://example.com/sony",
+                "saved_at": "2026-03-20T00:00:00Z",
+            }
+        ]
+    }
+    # Another active user watches the same query
+    other = User(
+        email="other@example.com",
+        username="otheruser",
+        hashed_password=bcrypt.hashpw(b"pw", bcrypt.gensalt()).decode(),
+        is_active=True,
+        notification_preferences={
+            "saved_feeds": [
+                {
+                    "id": "f-other",
+                    "query": "sony headphones",
+                    "title": "Sony",
+                    "url": "https://example.com/sony",
+                    "saved_at": "2026-03-20T00:00:00Z",
+                }
+            ]
+        },
+    )
+    session.add(other)
+    src = DealSource(
+        name="sony headphones",
+        url="watchlist://sony headphones",
+        is_active=True,
+    )
+    session.add(src)
+    await session.flush()
+    await session.refresh(src)
+    deal = Deal(
+        source_id=src.id,
+        external_id="wl-002",
+        title="Sony WH-1000XM5",
+        url="https://example.com/sony2",
+        is_high_value=True,
+        status=DealStatus.EVALUATED,
+    )
+    session.add(deal)
+    await session.commit()
+    await session.refresh(src)
+    await session.refresh(deal)
+    return {"source": src, "deal": deal, "other_user": other}
+
+
+class TestWatchlistDealCleanup:
+    """Tests for orphaned watchlist deal cleanup on feed removal."""
+
+    def test_removes_orphaned_deals_on_feed_removal(
+        self, client, user, watchlist_source_and_deal,
+    ) -> None:
+        """Removing a feed should delete its watchlist:// deals when no other user watches it."""
+        resp = client.put(
+            f"/api/v1/users/{user.id}/preferences",
+            json={"saved_feeds": []},
+            headers={"X-Test-User-Id": str(user.id)},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert "orphaned deal(s) removed" in body["message"]
+
+    def test_preserves_deals_when_another_user_watches_same_query(
+        self, client, user, watchlist_shared_by_other_user,
+    ) -> None:
+        """Deals should NOT be deleted when another active user has the same query."""
+        resp = client.put(
+            f"/api/v1/users/{user.id}/preferences",
+            json={"saved_feeds": []},
+            headers={"X-Test-User-Id": str(user.id)},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["message"] == (
+            "Feed saved. New deals matching your watchlist will trigger notifications."
+        )
+
 class TestDeleteUser:
     """Tests for DELETE /api/v1/users/{user_id}."""
 
