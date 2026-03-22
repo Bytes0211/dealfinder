@@ -403,7 +403,7 @@ class TestWatchlistDealCleanup:
         )
         assert resp.status_code == 200
         body = resp.json()
-        assert "orphaned deal(s) removed" in body["message"]
+        assert "associated deal(s) cleaned up" in body["message"]
 
     def test_preserves_deals_when_another_user_watches_same_query(
         self, client, user, watchlist_shared_by_other_user,
@@ -416,9 +416,7 @@ class TestWatchlistDealCleanup:
         )
         assert resp.status_code == 200
         body = resp.json()
-        assert body["message"] == (
-            "Feed saved. New deals matching your watchlist will trigger notifications."
-        )
+        assert body["message"] == "Feed removed."
 
 class TestDeleteUser:
     """Tests for DELETE /api/v1/users/{user_id}."""
