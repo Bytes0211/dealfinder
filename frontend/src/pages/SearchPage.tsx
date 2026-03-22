@@ -192,7 +192,6 @@ export function SearchPage() {
                 <th></th>
                 <th>Feed</th>
                 <th>Source</th>
-                <th>Description</th>
                 <th>Quality Score</th>
                 <th></th>
               </tr>
@@ -226,15 +225,6 @@ export function SearchPage() {
                         <a href={result.url} target="_blank" rel="noopener noreferrer" className="deal-card-domain">
                           {shortDomain(result.url)}
                         </a>
-                      )}
-                    </td>
-
-                    <td className="search-row-desc">
-                      {result.current_price && (
-                        <span className="search-result-price">{result.current_price}</span>
-                      )}
-                      {result.quality_reason && (
-                        <span className="search-result-reason">{result.quality_reason}</span>
                       )}
                     </td>
 
