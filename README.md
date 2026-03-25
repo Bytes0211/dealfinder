@@ -110,6 +110,8 @@ EventBridge (schedule) → Scanner → Evaluate → Decide (discount > threshold
 - **Monitoring:** CloudWatch (logs, alarms, dashboard, cost anomaly detection)
 - **Secrets:** AWS Secrets Manager
 
+
+
 ## Repository Structure
 
 ```
